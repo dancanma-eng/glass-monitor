@@ -65,7 +65,24 @@ button{cursor:pointer}
 .last{font-size:13px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums}
 .last b{color:var(--ink)} .last .ok{color:var(--ok);font-weight:700} .last .ng{color:var(--ng);font-weight:700} .last .na{color:var(--band);font-weight:700}
 
-.strip{display:grid;grid-template-columns:1fr 1fr 1.6fr;gap:6px}
+.strip{display:grid;grid-template-columns:1.25fr 1fr;gap:6px}
+.model{display:flex;flex-direction:column;align-items:flex-start;text-align:left;border:2px solid var(--accent);background:var(--panel);border-radius:8px;padding:4px 10px;min-height:56px}
+.model small{font-size:11px;color:var(--muted)}
+.model b{font-size:20px;line-height:1.15}
+.model span{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.btn.play{background:var(--ok);border-color:var(--ok);color:#fff;font-size:15px}
+.btn.stop{background:var(--ng);border-color:var(--ng);color:#fff;font-size:15px}
+.mlist{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mitem{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--bg)}
+.mitem.sel{border:2px solid var(--accent)}
+.mitem .pick{flex:1;border:0;background:transparent;text-align:left;padding:10px 10px;min-height:56px}
+.mitem .pick b{display:block;font-size:17px}
+.mitem .pick small{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.mitem .ed{border:0;border-left:1px solid var(--line);background:transparent;padding:0 10px;font-size:12px;color:var(--muted)}
+.medit{margin-top:12px;padding:10px;border:1px solid var(--line);border-radius:10px}
+.medit .row{display:flex;gap:8px;margin-top:10px}
+.medit .row .btn{flex:1}
+.form input[type=text]{border:1px solid var(--line);background:var(--bg);border-radius:7px;padding:8px 10px;font-size:16px;width:100%}
 .strip label{display:flex;flex-direction:column;font-size:11px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px 8px}
 .strip input{border:0;background:transparent;font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;width:100%;padding:0}
 .counts{display:grid;grid-template-columns:repeat(3,1fr);background:var(--panel);border:1px solid var(--line);border-radius:8px}
@@ -134,7 +151,7 @@ button{cursor:pointer}
       <p id="hint" class="hint">카메라를 시작하세요.</p>
       <div id="readout" class="readout">
         <div class="row1">
-          <div class="live"><small>실시간 치수</small><div class="big"><b id="val">—</b><span>mm</span></div></div>
+          <div class="live"><small>인식 눈금 (가려진 경계)</small><div class="big"><b id="val">—</b><span>mm</span></div></div>
           <div id="verdict" class="verdict">대기</div>
         </div>
         <div class="gauge" aria-hidden="true"><div id="bandz" class="bandz"></div><div id="needle" class="needle" hidden></div></div>
@@ -142,19 +159,18 @@ button{cursor:pointer}
         <div class="last">최근 판정 <b id="lastVal">—</b> <span id="lastK"></span></div>
       </div>
       <div class="strip">
-        <label>정상 치수<input id="f_target" type="number" step="0.5" inputmode="decimal"></label>
-        <label>허용 ±<input id="f_tol" type="number" step="0.5" min="0" inputmode="decimal"></label>
+        <button id="modelBtn" class="model" aria-label="모델 선택"><small>모델 (눌러서 변경)</small><b id="mName">—</b><span id="mVal">값 입력 필요</span></button>
         <div class="counts">
           <div><small>통과</small><strong id="cPass">0</strong></div>
-          <div class="c-ok"><small>정상</small><strong id="cOk">0</strong></div>
-          <div class="c-ng"><small>불량</small><strong id="cNg">0</strong></div>
+          <div class="c-ok"><small>GOOD</small><strong id="cOk">0</strong></div>
+          <div class="c-ng"><small>NG</small><strong id="cNg">0</strong></div>
         </div>
       </div>
       <div class="actions">
+        <button id="playBtn" class="btn play">▶ 시작</button>
         <button id="pickBtn" class="btn" disabled>기준점<br>지정</button>
         <button id="bgBtn" class="btn" disabled>눈금자<br>기준 저장</button>
         <button id="testBtn" class="btn">알람<br>테스트</button>
-        <button id="resetBtn" class="btn">카운트<br>초기화</button>
       </div>
     </div>
   </div>
@@ -183,12 +199,30 @@ button{cursor:pointer}
     </div>
     <p class="note">그래프는 눈금자가 가려진 정도입니다(왼쪽이 A점). 유리가 없을 때는 전체가 노란 선 아래, 유리가 지나갈 때는 가려진 구간이 노란 선 위로 올라오도록 기준을 맞추세요.</p>
     <h3>측정 기록</h3>
+    <button id="resetBtn" class="btn" style="width:100%;margin-bottom:8px">카운트·기록 초기화</button>
     <ul id="log" class="log"><li style="color:var(--muted)">아직 기록이 없습니다.</li></ul>
   </div>
 </div>
 
+<div id="msheet" class="sheet" hidden>
+  <div class="box" role="dialog" aria-labelledby="mTitle">
+    <h2 id="mTitle">모델 선택 <button id="mClose" class="icon">닫기</button></h2>
+    <div id="mList" class="mlist"></div>
+    <button id="mAdd" class="btn" style="width:100%;margin-top:10px">+ 모델 추가</button>
+    <div id="mEdit" class="medit" hidden>
+      <div class="form">
+        <label class="full">모델 이름<input id="e_name" type="text" autocomplete="off"></label>
+        <label>설정값 (mm)<input id="e_target" type="number" step="0.5" inputmode="decimal"></label>
+        <label>허용 오차 ± (mm)<input id="e_tol" type="number" step="0.5" min="0" inputmode="decimal"></label>
+      </div>
+      <div class="row"><button id="e_save" class="btn primary">저장</button><button id="e_del" class="btn">삭제</button><button id="e_cancel" class="btn">취소</button></div>
+    </div>
+    <p class="note">모델을 누르면 선택되고, "편집"에서 설정값과 허용 오차를 바꿀 수 있습니다.</p>
+  </div>
+</div>
+
 <div id="alarm" class="alarm" hidden role="alertdialog" aria-labelledby="alarmTitle">
-  <h2 id="alarmTitle">치수 불량</h2>
+  <h2 id="alarmTitle">NG · 다른 유리</h2>
   <div class="v" id="alarmVal">—</div>
   <p id="alarmRef"></p>
   <button id="ackBtn">확인 · 알람 정지</button>
@@ -202,7 +236,7 @@ const video=document.createElement('video');
 video.muted=true; video.playsInline=true; video.setAttribute('playsinline','');
 
 const KEY='glassgauge.v1';
-const DEF={ax:.08,ay:.5,bx:.92,by:.5,lineSet:false,aVal:0,bVal:100,target:46,tol:2,match:.5,stable:6,band:3,cover:45,hold:true,okBeep:true};
+const DEF={ax:.08,ay:.5,bx:.92,by:.5,lineSet:false,aVal:0,bVal:100,target:46,tol:2,match:.5,stable:6,band:3,cover:45,hold:true,okBeep:true,cur:0,models:[{name:'M3',target:null,tol:2},{name:'25M3',target:null,tol:2},{name:'M6',target:null,tol:2},{name:'26M6',target:null,tol:2},{name:'VF best',target:null,tol:2},{name:'VF better X',target:null,tol:2}]};
 let S=Object.assign({},DEF);
 try{const j=localStorage.getItem(KEY); if(j) Object.assign(S,JSON.parse(j));}catch(e){}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
@@ -211,9 +245,20 @@ let running=false, mode='run', bg=null, lastProfile=null, lastA=null;
 let state='idle', buf=[], absent=0, liveMm=null, decided=null, hadValues=false;
 const counts={pass:0,ok:0,ng:0}; const log=[];
 let W=view.width, H=view.height;
+let armed=false;
+const tgtOk=()=>S.target!=null&&isFinite(S.target);
+function curModel(){return S.models[S.cur]||null;}
+function syncModel(){
+  if(!S.models.length) S.models.push({name:'새 모델',target:null,tol:2});
+  if(S.cur>=S.models.length) S.cur=0;
+  const m=curModel(); S.target=(m.target==null||m.target==='')?null:+m.target; S.tol=+m.tol||0;
+  $('#mName').textContent=m.name;
+  $('#mVal').textContent=tgtOk()?fmt(S.target)+' ± '+fmt(S.tol)+' mm':'설정값 입력 필요';
+  save(); refreshStatic();
+}
 
 /* ---------- settings binding ---------- */
-['target','tol','aVal','bVal','match','stable','band','cover'].forEach(k=>{
+['aVal','bVal','match','stable','band','cover'].forEach(k=>{
   const el=$('#f_'+k); el.value=S[k];
   el.addEventListener('input',()=>{
     const v=parseFloat(el.value); if(isNaN(v)) return;
@@ -238,7 +283,7 @@ function vib(p){try{navigator.vibrate&&navigator.vibrate(p);}catch(e){}}
 let alarmTimer=null, alarmStop=null, flip=false;
 function startAlarm(mm){
   $('#alarmVal').textContent=fmt(mm)+' mm';
-  $('#alarmRef').textContent='정상 '+fmt(S.target)+' ± '+fmt(S.tol)+' mm  ·  차이 '+(mm-S.target>0?'+':'')+fmt(mm-S.target)+' mm';
+  $('#alarmRef').textContent=(curModel()?curModel().name+'  ':'')+'설정 '+fmt(S.target)+' ± '+fmt(S.tol)+' mm  ·  차이 '+(mm-S.target>0?'+':'')+fmt(mm-S.target)+' mm';
   $('#alarm').hidden=false; unlockAudio();
   if(alarmTimer) return;
   alarmTimer=setInterval(()=>{flip=!flip; tone(flip?1180:760,.22,.75); vib(200);},260);
@@ -246,7 +291,7 @@ function startAlarm(mm){
 }
 function stopAlarm(){clearInterval(alarmTimer); alarmTimer=null; clearTimeout(alarmStop); vib(0); $('#alarm').hidden=true;}
 $('#ackBtn').addEventListener('click',stopAlarm);
-$('#testBtn').addEventListener('click',()=>{unlockAudio(); startAlarm(S.target+7);});
+$('#testBtn').addEventListener('click',()=>{unlockAudio(); startAlarm(tgtOk()?S.target+7:0);});
 
 /* ---------- wake lock ---------- */
 let wake=null;
@@ -352,13 +397,13 @@ function process(a,p){
       hadValues=true; buf.push(liveMm); if(buf.length>S.stable) buf.shift();
       if(buf.length>=S.stable){
         const span=Math.max(...buf)-Math.min(...buf);
-        if(span<=Math.max(1.5,mmPerPx()*3)) decide(median(buf));
+        if(armed && tgtOk() && span<=Math.max(1.5,mmPerPx()*3)) decide(median(buf));
       }
     }
   }else{
     absent++;
     if(absent>8 && (state==='measuring'||state==='decided')){
-      if(state==='measuring'&&hadValues){addLog(null,'na'); tone(520,.12,.5); setTimeout(()=>tone(520,.12,.5),180);}
+      if(armed&&state==='measuring'&&hadValues){addLog(null,'na'); tone(520,.12,.5); setTimeout(()=>tone(520,.12,.5),180);}
       state='ready'; buf=[]; liveMm=null;
     }
     if(absent>15 && state==='ready'){for(let i=0;i<bg.length;i++) bg[i]+=(p[i]-bg[i])*.02;}
@@ -386,10 +431,8 @@ function drawOverlay(a){
   const {A,B}=pts();
   ctx.lineCap='round';
   ctx.strokeStyle='rgba(111,178,224,.9)'; ctx.lineWidth=lw; ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
-  if(lineOk()){
-    const p1=mmToPt(S.target-S.tol), p2=mmToPt(S.target+S.tol);
-    ctx.strokeStyle='rgba(255,191,46,.75)'; ctx.lineWidth=lw*5; ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
-  }
+  if(lineOk()) drawRecognition(a,A,B);
+  if(lineOk()&&tgtOk()) drawTarget(A,B);
   dot(A,'#6fb2e0','A '+S.aVal); dot(B,'#6fb2e0','B '+S.bVal);
   if(a&&a.present){
     const e=mmToPt(idxToMm(a.edge,a.N)), ok=Math.abs(idxToMm(a.edge,a.N)-S.target)<=S.tol;
@@ -402,6 +445,74 @@ function drawOverlay(a){
     ctx.fillStyle='rgba(0,0,0,.65)'; ctx.fillRect(tx-6,ty-fs,tw+12,fs*1.2);
     ctx.fillStyle=ok?'#2bc47a':'#ff4a40'; ctx.fillText(txt,tx,ty-fs*.05);
   }
+}
+function drawTarget(A,B){
+  const L=Math.hypot(B.x-A.x,B.y-A.y), nx=-(B.y-A.y)/L, ny=(B.x-A.x)/L;
+  const fs=Math.max(13,Math.round(Math.min(W,H)/22)), len=fs*3.2;
+  const sg=Math.abs(nx)>0.3?(nx<0?-1:1):(ny<0?-1:1), ox=nx*sg, oy=ny*sg;   // 라벨은 눈금 숫자 반대쪽(오른쪽)
+  const c=mmToPt(S.target), lo=mmToPt(S.target-S.tol), hi=mmToPt(S.target+S.tol);
+  // 허용 구간 음영
+  ctx.fillStyle='rgba(255,60,50,.22)'; ctx.beginPath();
+  ctx.moveTo(lo.x-ox*len*.6,lo.y-oy*len*.6); ctx.lineTo(lo.x+ox*len,lo.y+oy*len);
+  ctx.lineTo(hi.x+ox*len,hi.y+oy*len); ctx.lineTo(hi.x-ox*len*.6,hi.y-oy*len*.6); ctx.closePath(); ctx.fill();
+  // ± 경계선 (점선)
+  ctx.strokeStyle='#ff8a80'; ctx.lineWidth=2; ctx.setLineDash([6,4]);
+  [lo,hi].forEach(q=>{ctx.beginPath(); ctx.moveTo(q.x-ox*len*.6,q.y-oy*len*.6); ctx.lineTo(q.x+ox*len,q.y+oy*len); ctx.stroke();});
+  ctx.setLineDash([]);
+  // 설정값 빨간 라인
+  ctx.strokeStyle='#ff2a1f'; ctx.lineWidth=Math.max(3,W/180);
+  ctx.beginPath(); ctx.moveTo(c.x-ox*len*.6,c.y-oy*len*.6); ctx.lineTo(c.x+ox*len,c.y+oy*len); ctx.stroke();
+  // 라벨
+  const m=curModel(), t1=(m?m.name+'  ':'')+fmt(S.target), t2='± '+fmt(S.tol)+' mm';
+  ctx.font='700 '+fs+'px system-ui,sans-serif'; ctx.textBaseline='middle'; ctx.textAlign=ox<0?'right':'left';
+  const tw=Math.max(ctx.measureText(t1).width,ctx.measureText(t2).width), tx=c.x+ox*(len+6), ty=c.y+oy*(len+6);
+  const bx=ox<0?tx-tw-8:tx-4;
+  ctx.fillStyle='rgba(160,0,0,.85)'; ctx.fillRect(bx,ty-fs*1.2,tw+12,fs*2.4);
+  ctx.fillStyle='#fff'; ctx.fillText(t1,tx,ty-fs*.55); ctx.font='600 '+Math.round(fs*.8)+'px system-ui,sans-serif'; ctx.fillText(t2,tx,ty+fs*.6);
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+}
+const reduceMotion=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+function drawRecognition(a,A,B){
+  const range=S.bVal-S.aVal, Lpx=Math.hypot(B.x-A.x,B.y-A.y), ppu=Lpx/Math.abs(range);
+  const fs=Math.max(12,Math.round(Math.min(W,H)/24));
+  let step=500; for(const st of [0.1,0.2,0.5,1,2,5,10,20,50,100,200,500]){ if(st*ppu>=fs*1.45){step=st;break;} }
+  const nx=-(B.y-A.y)/Lpx, ny=(B.x-A.x)/Lpx;
+  let sg=Math.abs(nx)>0.3?(nx<0?1:-1):(ny<0?1:-1); const ox=nx*sg, oy=ny*sg;   // 라벨은 눈금자 왼쪽(또는 위쪽)에
+  const thr=1-S.match, lo=Math.min(S.aVal,S.bVal), hi=Math.max(S.aVal,S.bVal);
+  ctx.font='700 '+fs+'px system-ui,sans-serif'; ctx.textBaseline='middle'; ctx.textAlign=ox<0?'right':'left';
+  let visLo=null, visHi=null;
+  for(let v=Math.ceil(lo/step-1e-9)*step; v<=hi+1e-9; v+=step){
+    const t=(v-S.aVal)/range, p=mmToPt(v);
+    let st='cal';
+    if(a&&bg){ const idx=Math.max(0,Math.min(a.N-1,Math.round(t*(a.N-1)))); st=a.s[idx]>thr?'hid':'vis'; }
+    if(st==='vis'){ visLo=visLo==null?v:Math.min(visLo,v); visHi=visHi==null?v:Math.max(visHi,v); }
+    const col=st==='vis'?'#2bff8a':st==='hid'?'#ff5a4f':'#6fd3ff';
+    const tx=p.x+ox*fs*1.1, ty=p.y+oy*fs*1.1;
+    ctx.strokeStyle=col; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x+ox*fs*.8,p.y+oy*fs*.8); ctx.stroke();
+    const txt=step<1?v.toFixed(1):String(Math.round(v)), tw=ctx.measureText(txt).width, pad=4;
+    const bx=ctx.textAlign==='right'?tx-tw-pad:tx-pad;
+    ctx.fillStyle=st==='hid'?'rgba(120,0,0,.55)':'rgba(0,0,0,.6)'; ctx.fillRect(bx,ty-fs*.62,tw+pad*2,fs*1.24);
+    ctx.strokeStyle=col; ctx.lineWidth=1.5; ctx.strokeRect(bx,ty-fs*.62,tw+pad*2,fs*1.24);
+    ctx.fillStyle=col; ctx.fillText(txt,tx,ty+1);
+    if(st==='hid'){ctx.beginPath(); ctx.moveTo(bx+2,ty); ctx.lineTo(bx+tw+pad*2-2,ty); ctx.stroke();}
+  }
+  // 스캔 효과
+  if(!reduceMotion){
+    const ph=(performance.now()/1400)%1, q={x:A.x+(B.x-A.x)*ph,y:A.y+(B.y-A.y)*ph}, len=fs*2.2;
+    const gr=ctx.createLinearGradient(q.x-ox*len,q.y-oy*len,q.x+ox*len,q.y+oy*len);
+    gr.addColorStop(0,'rgba(43,255,138,0)'); gr.addColorStop(.5,'rgba(43,255,138,.9)'); gr.addColorStop(1,'rgba(43,255,138,0)');
+    ctx.strokeStyle=gr; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(q.x-ox*len,q.y-oy*len); ctx.lineTo(q.x+ox*len,q.y+oy*len); ctx.stroke();
+  }
+  // 상단 정보창
+  const hs=Math.max(12,Math.round(Math.min(W,H)/30));
+  const l1='● 실시간 인식  '+Math.round(fps)+' fps';
+  const l2=!bg?'눈금자 기준 저장 필요':(visLo==null?'보이는 눈금 없음':'보이는 눈금 '+(step<1?visLo.toFixed(1):Math.round(visLo))+' ~ '+(step<1?visHi.toFixed(1):Math.round(visHi)));
+  ctx.textAlign='left'; ctx.font='700 '+hs+'px system-ui,sans-serif';
+  const bw=Math.max(ctx.measureText(l1).width,ctx.measureText(l2).width)+hs*1.2;
+  ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(8,8,bw,hs*3);
+  ctx.fillStyle=(Math.floor(performance.now()/500)%2)?'#2bff8a':'#19a85a'; ctx.fillText(l1,8+hs*.6,8+hs*.95);
+  ctx.fillStyle='#e8eef0'; ctx.fillText(l2,8+hs*.6,8+hs*2.1);
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
 }
 function dot(p,c,label){
   const r=Math.max(6,W/110); ctx.fillStyle=c; ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.fill();
@@ -426,9 +537,11 @@ function renderStatus(){
     else if(!S.lineSet){t='설정 필요'; hint='"기준점 지정"을 눌러 측정선을 만드세요.'; warn=true;}
     else if(!lineOk()){t='설정 확인'; hint='A·B 눈금값이 같거나 두 점이 너무 가깝습니다.'; warn=true;}
     else if(!bg){t='배경 필요'; hint='유리가 없어 눈금자가 다 보이는 상태에서 "눈금자 기준 저장"을 누르세요. A·B 눈금값도 확인하세요.'; warn=true;}
+    else if(!tgtOk()){t='설정값 필요'; hint='모델을 눌러 "편집"에서 설정값(mm)을 입력하세요.'; warn=true;}
+    else if(!armed){t='정지'; hint='모델과 빨간 설정 라인을 확인하고 "▶ 시작"을 누르세요. 정지 중에도 인식 눈금은 표시됩니다.'; warn=true;}
     else if(state==='measuring'){t='측정 중'; cls='run'; hint='유리 인식 중… 값이 안정되면 판정합니다.';}
-    else if(state==='decided'){const ok=Math.abs(decided-S.target)<=S.tol; t=ok?'정상':'불량'; cls=ok?'ok':'ng'; hint=ok?'정상 판정. 유리가 지나가면 다음 유리를 기다립니다.':'불량 판정! 라인을 확인하세요.';}
-    else {t='대기 중'; hint='유리 진입을 기다리는 중입니다. 눈금 정확도는 mm당 약 '+fmt(1/mmPerPx())+'px ('+fmt(mmPerPx())+' mm/px).';}
+    else if(state==='decided'){const ok=Math.abs(decided-S.target)<=S.tol; t=ok?'GOOD':'NG'; cls=ok?'ok':'ng'; hint=ok?'GOOD: 설정값 지점이 가려졌습니다. 다음 유리를 기다립니다.':'NG: 설정값과 다른 지점이 가려졌습니다. 다른 유리 혼입을 확인하세요.';}
+    else {t='감시 중'; hint=curModel().name+' 감시 중. 유리 진입을 기다리는 중입니다. 눈금 정확도는 mm당 약 '+fmt(1/mmPerPx())+'px ('+fmt(mmPerPx())+' mm/px).';}
   }
   const key=t+cls+hint;
   if(key!==lastStateText){
@@ -436,39 +549,44 @@ function renderStatus(){
     const st=$('#state'); st.textContent=t; st.className='state '+cls;
     const h=$('#hint'); h.textContent=hint; h.className='hint'+(warn?' warn':'');
   }
-  const shown=liveMm;
+  const shown=liveMm!=null?liveMm:((running&&bg&&mode==='run'&&lineOk())?S.aVal:null);
   $('#val').textContent=shown==null?'—':fmt(shown);
   const v=$('#verdict'), ro=$('#readout');
   if(state==='decided'){
     const ok=Math.abs(decided-S.target)<=S.tol, d=decided-S.target;
-    v.innerHTML=(ok?'정상':'불량')+'<small>'+(d>0?'+':'')+fmt(d)+' mm</small>'; v.className='verdict '+(ok?'ok':'ng'); ro.className='readout '+(ok?'ok':'ng');
+    v.innerHTML=(ok?'GOOD':'NG')+'<small>'+(d>0?'+':'')+fmt(d)+' mm</small>'; v.className='verdict '+(ok?'ok':'ng'); ro.className='readout '+(ok?'ok':'ng');
   }else if(state==='measuring'){v.innerHTML='측정 중'; v.className='verdict run'; ro.className='readout';}
-  else{v.innerHTML='대기'; v.className='verdict'; ro.className='readout';}
+  else{v.innerHTML=armed?'감시 중':'정지'; v.className='verdict'+(armed?' run':''); ro.className='readout';}
   const lo=S.target-Math.max(S.tol*4,8), hi=S.target+Math.max(S.tol*4,8), nd=$('#needle');
-  if(shown==null) nd.hidden=true; else {nd.hidden=false; nd.style.left=Math.max(0,Math.min(100,(shown-lo)/(hi-lo)*100))+'%';}
+  if(shown==null||!tgtOk()) nd.hidden=true; else {nd.hidden=false; nd.style.left=Math.max(0,Math.min(100,(shown-lo)/(hi-lo)*100))+'%';}
 }
 function refreshStatic(){
+  if(!tgtOk()){ $('#bandz').style.width='0'; $('#gmin').textContent=''; $('#gmax').textContent=''; }
+  else{
   const lo=S.target-Math.max(S.tol*4,8), hi=S.target+Math.max(S.tol*4,8);
   const bz=$('#bandz'); bz.style.left=((S.target-S.tol-lo)/(hi-lo)*100)+'%'; bz.style.width=(2*S.tol/(hi-lo)*100)+'%';
   $('#gmin').textContent=fmt(lo); $('#gmax').textContent=fmt(hi);
-  if($('#ref')) $('#ref').textContent='정상 '+fmt(S.target)+' mm, 허용 '+fmt(S.target-S.tol)+' ~ '+fmt(S.target+S.tol)+' mm';
+  }
+  if($('#ref')&&tgtOk()) $('#ref').textContent='정상 '+fmt(S.target)+' mm, 허용 '+fmt(S.target-S.tol)+' ~ '+fmt(S.target+S.tol)+' mm';
   $('#o_match').textContent=' '+S.match; $('#o_stable').textContent=' '+S.stable; $('#o_band').textContent=' '+S.band; $('#o_cover').textContent=' '+S.cover;
 }
 function renderCounts(){$('#cPass').textContent=counts.pass; $('#cOk').textContent=counts.ok; $('#cNg').textContent=counts.ng;}
-function addLog(mm,k){log.unshift({t:new Date(),mm,k}); if(log.length>200) log.pop(); renderLog();
-  $('#lastVal').textContent=mm==null?'—':fmt(mm)+' mm'; const lk=$('#lastK'); lk.textContent=k==='ok'?'정상':k==='ng'?'불량':'미판정'; lk.className=k;}
+function addLog(mm,k){log.unshift({t:new Date(),mm,k,m:curModel()?curModel().name:''}); if(log.length>200) log.pop(); renderLog();
+  $('#lastVal').textContent=mm==null?'—':fmt(mm)+' mm'; const lk=$('#lastK'); lk.textContent=k==='ok'?'GOOD':k==='ng'?'NG':'미판정'; lk.className=k;}
 function renderLog(){
   const ul=$('#log');
   if(!log.length){ul.innerHTML='<li style="color:var(--muted)">아직 기록이 없습니다.</li>'; return;}
   ul.innerHTML=log.slice(0,100).map(r=>{
-    const tm=r.t.toTimeString().slice(0,8), lab=r.k==='ok'?'정상':r.k==='ng'?'불량':'미판정';
-    return '<li><time>'+tm+'</time><span>'+(r.mm==null?'—':fmt(r.mm)+' mm')+'</span><span class="k '+r.k+'">'+lab+'</span></li>';
+    const tm=r.t.toTimeString().slice(0,8), lab=r.k==='ok'?'GOOD':r.k==='ng'?'NG':'미판정';
+    return '<li><time>'+tm+'</time><span>'+esc(r.m)+'</span><span>'+(r.mm==null?'—':fmt(r.mm)+' mm')+'</span><span class="k '+r.k+'">'+lab+'</span></li>';
   }).join('');
 }
 
 /* ---------- main loop ---------- */
+let fpsT=performance.now(), fpsN=0, fps=0;
 function loop(){
   if(!running) return;
+  fpsN++; {const now=performance.now(); if(now-fpsT>1000){fps=fpsN*1000/(now-fpsT); fpsN=0; fpsT=now;}}
   if(video.readyState>=2) ctx.drawImage(video,0,0,W,H);
   let a=null;
   if(mode==='run'&&lineOk()){
@@ -485,6 +603,50 @@ function loop(){
 $('#setBtn').addEventListener('click',()=>{$('#sheet').hidden=false;});
 $('#closeBtn').addEventListener('click',()=>{$('#sheet').hidden=true;});
 $('#sheet').addEventListener('click',e=>{if(e.target.id==='sheet') $('#sheet').hidden=true;});
+function esc(x){return String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+let editIdx=-1;
+function renderModels(){
+  $('#mList').innerHTML=S.models.map((m,i)=>'<div class="mitem'+(i===S.cur?' sel':'')+'"><button class="pick" data-i="'+i+'"><b>'+esc(m.name)+'</b><small>'+(m.target==null||m.target===''?'설정값 없음':fmt(+m.target)+' ± '+fmt(+m.tol)+' mm')+'</small></button><button class="ed" data-e="'+i+'">편집</button></div>').join('');
+}
+function openEdit(i){
+  editIdx=i; const m=i>=0?S.models[i]:{name:'',target:'',tol:2};
+  $('#e_name').value=m.name; $('#e_target').value=m.target==null?'':m.target; $('#e_tol').value=m.tol;
+  $('#e_del').hidden=i<0; $('#mEdit').hidden=false; $('#e_name').focus();
+}
+$('#modelBtn').addEventListener('click',()=>{renderModels(); $('#mEdit').hidden=true; $('#msheet').hidden=false;});
+$('#mClose').addEventListener('click',()=>{$('#msheet').hidden=true;});
+$('#msheet').addEventListener('click',e=>{if(e.target.id==='msheet') $('#msheet').hidden=true;});
+$('#mList').addEventListener('click',e=>{
+  const pk=e.target.closest('.pick'), ed=e.target.closest('.ed');
+  if(pk){S.cur=+pk.dataset.i; state='ready'; buf=[]; syncModel(); renderModels(); $('#msheet').hidden=true;}
+  else if(ed){openEdit(+ed.dataset.e);}
+});
+$('#mAdd').addEventListener('click',()=>openEdit(-1));
+$('#e_cancel').addEventListener('click',()=>{$('#mEdit').hidden=true;});
+$('#e_save').addEventListener('click',()=>{
+  const name=$('#e_name').value.trim(); if(!name){$('#e_name').focus(); return;}
+  const tv=parseFloat($('#e_target').value), tol=parseFloat($('#e_tol').value);
+  const m={name,target:isNaN(tv)?null:tv,tol:isNaN(tol)?2:tol};
+  if(editIdx<0){S.models.push(m); S.cur=S.models.length-1;} else S.models[editIdx]=m;
+  $('#mEdit').hidden=true; syncModel(); renderModels();
+});
+$('#e_del').addEventListener('click',()=>{
+  if(editIdx<0) return; if(!confirm(S.models[editIdx].name+' 모델을 삭제할까요?')) return;
+  S.models.splice(editIdx,1); if(S.cur>=editIdx&&S.cur>0) S.cur--; $('#mEdit').hidden=true; syncModel(); renderModels();
+});
+function setArmed(v){
+  armed=v; state='ready'; buf=[]; decided=null;
+  const b=$('#playBtn'); b.textContent=v?'■ 정지':'▶ 시작'; b.className='btn '+(v?'stop':'play');
+}
+$('#playBtn').addEventListener('click',()=>{
+  unlockAudio();
+  if(!armed){
+    if(!tgtOk()){renderModels(); $('#msheet').hidden=false; openEdit(S.cur); return;}
+    if(!running||!lineOk()||!bg){alert('먼저 카메라 시작 → 기준점 지정 → 눈금자 기준 저장을 해주세요.'); return;}
+  }
+  setArmed(!armed);
+});
+syncModel();
 refreshStatic(); renderCounts(); renderStatus();
 })();
 if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
