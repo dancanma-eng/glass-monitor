@@ -79,6 +79,10 @@ button{cursor:pointer}
 .mitem .pick b{display:block;font-size:17px}
 .mitem .pick small{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .mitem .ed{border:0;border-left:1px solid var(--line);background:transparent;padding:0 10px;font-size:12px;color:var(--muted)}
+.calbar{position:absolute;left:8px;right:8px;bottom:8px;background:rgba(10,16,20,.88);color:#eef;border-radius:10px;padding:8px 10px;font-size:13px}
+.calbar .row{display:flex;gap:6px;margin-top:6px}
+.calbar button{flex:1;min-height:40px;border-radius:8px;border:1px solid #4a5a62;background:#1c272c;color:#eef;font-weight:600}
+.calbar button.primary{background:#1f8a4c;border-color:#1f8a4c}
 .medit{margin-top:12px;padding:10px;border:1px solid var(--line);border-radius:10px}
 .medit .row{display:flex;gap:8px;margin-top:10px}
 .medit .row .btn{flex:1}
@@ -146,6 +150,11 @@ button{cursor:pointer}
         <button id="startBtn" class="btn primary" style="padding:12px 22px">카메라 시작</button>
         <div id="camErr" style="font-size:13px;max-width:420px"></div>
       </div>
+      <div id="calBar" class="calbar" hidden>
+        <div id="calMsg"></div>
+        <div class="row"><button id="calM">라벨 ▲ 1mm</button><button id="calP">라벨 ▼ 1mm</button><button id="calFlip">방향 반대</button></div>
+        <div class="row"><button id="calRedo">다시 터치</button><button id="calOk" class="primary">맞음 · 완료</button></div>
+      </div>
     </div>
     <div class="panel">
       <p id="hint" class="hint">카메라를 시작하세요.</p>
@@ -168,7 +177,7 @@ button{cursor:pointer}
       </div>
       <div class="actions">
         <button id="playBtn" class="btn play">▶ 시작</button>
-        <button id="pickBtn" class="btn" disabled>기준점<br>지정</button>
+        <button id="autoBtn" class="btn" disabled>자동<br>설정</button>
         <button id="bgBtn" class="btn" disabled>눈금자<br>기준 저장</button>
         <button id="testBtn" class="btn">알람<br>테스트</button>
       </div>
@@ -180,6 +189,7 @@ button{cursor:pointer}
   <div class="box" role="dialog" aria-labelledby="sheetTitle">
     <h2 id="sheetTitle">설정 <button id="closeBtn" class="icon">닫기</button></h2>
     <h3>눈금 기준점</h3>
+    <button id="pickBtn" class="btn" style="width:100%;margin-bottom:8px" disabled>수동 기준점 지정 (두 점 터치)</button>
     <div class="form">
       <label>A점 눈금값 (롤러쪽)<input id="f_aVal" type="number" step="1" inputmode="decimal"></label>
       <label>B점 눈금값 (위쪽)<input id="f_bVal" type="number" step="1" inputmode="decimal"></label>
@@ -310,7 +320,7 @@ $('#startBtn').addEventListener('click',async()=>{
     const vw=video.videoWidth||1280, vh=video.videoHeight||720, sc=Math.min(1,960/Math.max(vw,vh));
     view.width=W=Math.round(vw*sc); view.height=H=Math.round(vh*sc);
     
-    $('#empty').hidden=true; $('#pickBtn').disabled=false; $('#bgBtn').disabled=!S.lineSet;
+    $('#empty').hidden=true; $('#pickBtn').disabled=false; $('#autoBtn').disabled=false; $('#bgBtn').disabled=!S.lineSet;
     running=true; keepAwake(); requestAnimationFrame(loop);
   }catch(e){
     $('#camErr').textContent='카메라 권한이 거부되었거나 사용할 수 없습니다. 브라우저 설정에서 카메라를 허용한 뒤 다시 시도하세요. ('+(e.name||e)+')';
@@ -318,15 +328,96 @@ $('#startBtn').addEventListener('click',async()=>{
 });
 
 /* ---------- picking reference points ---------- */
-$('#pickBtn').addEventListener('click',()=>{mode='pickA'; bg=null; setState('setup');});
+$('#pickBtn').addEventListener('click',()=>{$('#sheet').hidden=true; setArmed(false); mode='pickA'; bg=null; setState('setup');});
+$('#autoBtn').addEventListener('click',()=>{setArmed(false); $('#calBar').hidden=true; mode='tap1'; bg=null;});
+
+/* ---------- 자동 설정: 숫자 하나 터치 → 눈금 간격으로 자동 계산 ---------- */
+let pendingBg=false;
+function detrend(a,win){const n=a.length,o=new Float32Array(n),pre=new Float64Array(n+1);for(let i=0;i<n;i++)pre[i+1]=pre[i]+a[i];for(let i=0;i<n;i++){const l=Math.max(0,i-win),r=Math.min(n,i+win+1);o[i]=a[i]-(pre[r]-pre[l])/(r-l);}return o;}
+function acorr(d,lag){let s=0,a=0,b=0;const n=d.length-lag;for(let i=0;i<n;i++){s+=d[i]*d[i+lag];a+=d[i]*d[i];b+=d[i+lag]*d[i+lag];}return s/Math.sqrt(a*b+1e-9);}
+function periodicity(prof){
+  const d=detrend(prof,20), maxLag=Math.min(45,Math.floor(d.length/4)), c=[];
+  for(let L=0;L<=maxLag;L++) c[L]=L<2?0:acorr(d,L);
+  let mx=0; for(let L=3;L<maxLag;L++) if(c[L]>c[L-1]&&c[L]>=c[L+1]&&c[L]>mx) mx=c[L];
+  if(mx<=0) return {score:0,lag:0};
+  for(let L=3;L<maxLag;L++) if(c[L]>c[L-1]&&c[L]>=c[L+1]&&c[L]>=0.8*mx) return {score:c[L],lag:L};
+  return {score:0,lag:0};
+}
+function peakNear(d,E,rad){
+  let bl=-1,bv=-2; for(let L=Math.max(2,Math.floor(E-rad)); L<=Math.ceil(E+rad)&&L<d.length/2; L++){const v=acorr(d,L); if(v>bv){bv=v;bl=L;}}
+  if(bl<3) return null; const a=acorr(d,bl-1),c=acorr(d,bl+1),den=a-2*bv+c;
+  return {lag:bl+(den<0?0.5*(a-c)/den:0),val:bv};
+}
+function autoCal(tx,ty,v0){
+  const img=ctx.getImageData(0,0,W,H).data, g=(x,y)=>{const o=(y*W+x)*4; return (img[o]+img[o+1]+img[o+2])/3;};
+  const bestCol=(y0,y1)=>{
+    let best={score:-1,x:tx}; const xr=Math.round(W*0.25);
+    for(let x=Math.max(2,tx-xr); x<=Math.min(W-3,tx+xr); x+=2){
+      const prof=new Float32Array(y1-y0); for(let y=y0;y<y1;y++) prof[y-y0]=(g(x-1,y)+g(x,y)+g(x+1,y))/3;
+      const r=periodicity(prof); if(r.score>best.score) best={score:r.score,x};
+    }
+    return best;
+  };
+  const h=Math.round(H*0.22), yM=Math.max(h*2,Math.min(H-h*2,ty));
+  const top=bestCol(Math.max(0,yM-h*2),yM), bot=bestCol(yM,Math.min(H,yM+h*2));
+  if(top.score<0.25||bot.score<0.25) return {err:'줄자 눈금을 찾지 못했습니다. 줄자가 화면 세로로 크게, 초점이 맞게 보이도록 해주세요.'};
+  // 1mm 잔눈금이 가장 촘촘하게 잡히는 위치로 미세 조정 (잔눈금은 줄자 가장자리에 짧게 있음)
+  const hf=(x0,y0,y1)=>{let t=0,prev=null; for(let y=y0;y<y1;y++){const x=Math.round(x0); if(x<1||x>W-2) return -1; const v=(g(x-1,y)+g(x,y)+g(x+1,y))/3; if(prev!=null) t+=Math.abs(v-prev); prev=v;} return t;};
+  const refine=(c,y0,y1)=>{let bx=c.x,bv=-1; for(let dx=-18;dx<=18;dx+=1){const v=hf(c.x+dx,y0,y1); if(v>bv){bv=v;bx=c.x+dx;}} c.x=bx;};
+  refine(top,Math.max(0,yM-h*2),yM); refine(bot,yM,Math.min(H,yM+h*2));
+  const yt=Math.max(0,yM-h), yb=Math.min(H-1,yM+h), k=(bot.x-top.x)/Math.max(1,yb-yt);
+  if(Math.abs(k)>0.35) return {err:'줄자가 너무 기울어져 있습니다. 줄자가 화면에서 세로로 서 있도록 폰을 맞춰주세요.'};
+  const X=y=>top.x+k*(y-yt);
+  const prof=new Float32Array(H); for(let y=0;y<H;y++){const x=Math.round(X(y)); prof[y]=(x>1&&x<W-2)?(g(x-1,y)+g(x,y)+g(x+1,y))/3:0;}
+  const d=detrend(prof,20), F=4, u=new Float32Array((H-1)*F+1);
+  for(let i=0;i<H-1;i++) for(let j=0;j<F;j++) u[i*F+j]=d[i]+(d[i+1]-d[i])*j/F;
+  const aF=L=>acorr(u,Math.round(L*F));
+  const sc=q=>{let t=0,c=0; for(let m=1;m<=6;m++){ if(m*q>H/3) break; t+=aF(m*q); c++; } return c?t/c:-1;};
+  let best={p:0,s:-1}; for(let q=2.5;q<=45;q+=0.25){const v=sc(q); if(v>best.s) best={p:q,s:v};}
+  if(best.s<0.2) return {err:'눈금 간격을 계산하지 못했습니다. 조명과 초점을 확인해주세요.'};
+  let ppy=best.p; for(let n=10;n>=2;n--){const q=best.p/n; if(q>=2.5 && sc(q)>=0.7*best.s){ppy=q; break;}}   // 1mm 간격 확정
+  for(const m of [10,20,30,50]){ if(m*ppy>H*0.45) break; const pk=peakNear(u,m*ppy*F,Math.max(2,ppy*0.6*F)); if(pk&&pk.val>0.15) ppy=pk.lag/(F*m); }
+  if(ppy<2.5) return {err:'줄자가 너무 작게 보입니다. 폰을 줄자에 더 가까이 두세요.'};
+  // 터치 위치를 가장 가까운 눈금선(어두운 선)에 맞춤
+  let ys=ty, mn=1e9; for(let y=Math.max(0,Math.round(ty-ppy*0.6)); y<=Math.min(H-1,Math.round(ty+ppy*0.6)); y++){ if(d[y]<mn){mn=d[y]; ys=y;} }
+  return {cal:{x0:top.x,y0:yt,k,ys,ppy,v0,dir:1}};
+}
+function applyCal(){
+  const c=S.cal, X=y=>c.x0+c.k*(y-c.y0), val=y=>c.v0+c.dir*(y-c.ys)/c.ppy;
+  const yA=H*0.97, yB=H*0.03;
+  S.ax=X(yA)/W; S.ay=yA/H; S.bx=X(yB)/W; S.by=yB/H;
+  S.aVal=Math.round(val(yA)*10)/10; S.bVal=Math.round(val(yB)*10)/10; S.lineSet=true;
+  $('#f_aVal').value=S.aVal; $('#f_bVal').value=S.bVal; $('#bgBtn').disabled=false;
+  $('#calMsg').innerHTML='왼쪽 라벨이 줄자 숫자와 맞으면 <b>완료</b> <span style="opacity:.7">(1mm ≈ '+(c.ppy).toFixed(1)+'px)</span>';
+  save(); refreshStatic();
+}
+$('#calM').addEventListener('click',()=>{S.cal.v0+=S.cal.dir; applyCal();});
+$('#calP').addEventListener('click',()=>{S.cal.v0-=S.cal.dir; applyCal();});
+$('#calFlip').addEventListener('click',()=>{S.cal.dir*=-1; applyCal();});
+$('#calRedo').addEventListener('click',()=>{$('#calBar').hidden=true; mode='tap1';});
+$('#calOk').addEventListener('click',()=>{$('#calBar').hidden=true; mode='run'; pendingBg=true;});
 view.addEventListener('pointerdown',e=>{
+  if(mode==='tap1'){
+    const r=view.getBoundingClientRect(), sc=Math.min(r.width/W,r.height/H), cw=W*sc, ch=H*sc;
+    const x=(e.clientX-r.left-(r.width-cw)/2)/cw, y=(e.clientY-r.top-(r.height-ch)/2)/ch;
+    if(x<0||x>1||y<0||y>1) return;
+    const v=parseFloat(prompt('방금 터치한 눈금선의 값을 mm로 입력하세요.\n예: 줄자 숫자 20(cm) → 200',S.cal?S.cal.v0:200));
+    if(isNaN(v)) return;
+    if(video.readyState>=2) ctx.drawImage(video,0,0,W,H);
+    const res=autoCal(Math.round(x*W),Math.round(y*H),v);
+    if(res.err){alert(res.err); return;}
+    S.cal=res.cal; mode='confirm'; applyCal(); $('#calBar').hidden=false; return;
+  }
   if(mode!=='pickA'&&mode!=='pickB') return;
   const r=view.getBoundingClientRect(), sc=Math.min(r.width/W,r.height/H), cw=W*sc, ch=H*sc;
   const x=(e.clientX-r.left-(r.width-cw)/2)/cw, y=(e.clientY-r.top-(r.height-ch)/2)/ch;
   if(x<0||x>1||y<0||y>1) return;
-  if(mode==='pickA'){S.ax=x;S.ay=y;mode='pickB';}
-  else{S.bx=x;S.by=y;mode='run';S.lineSet=true;$('#bgBtn').disabled=false;}
-  save();
+  const ask=(lab,cur)=>{const v=prompt(lab,cur); const n=parseFloat(v); return isNaN(n)?cur:n;};
+  if(mode==='pickA'){S.ax=x;S.ay=y;mode='pickB'; drawPickHint();
+    S.aVal=ask('방금 찍은 A점(아래쪽)의 줄자 눈금값을 mm로 입력하세요.\n예: 24cm 눈금이면 240',S.aVal); $('#f_aVal').value=S.aVal;}
+  else{S.bx=x;S.by=y;mode='run';S.lineSet=true;$('#bgBtn').disabled=false;
+    S.bVal=ask('방금 찍은 B점(위쪽)의 줄자 눈금값을 mm로 입력하세요.\n예: 13cm 눈금이면 130',S.bVal); $('#f_bVal').value=S.bVal;}
+  bg=null; save(); refreshStatic();
 });
 $('#bgBtn').addEventListener('click',()=>{
   if(lastProfile){bg=Float32Array.from(lastProfile); state='ready'; buf=[]; absent=99;}
@@ -334,6 +425,7 @@ $('#bgBtn').addEventListener('click',()=>{
 $('#resetBtn').addEventListener('click',()=>{counts.pass=counts.ok=counts.ng=0; log.length=0; renderCounts(); renderLog();});
 
 /* ---------- geometry ---------- */
+function drawPickHint(){}
 function pts(){return {A:{x:S.ax*W,y:S.ay*H},B:{x:S.bx*W,y:S.by*H}};}
 function lineOk(){const {A,B}=pts(); return S.lineSet && Math.hypot(B.x-A.x,B.y-A.y)>=40 && S.bVal!==S.aVal;}
 function idxToMm(i,N){return S.aVal+(i/(N-1))*(S.bVal-S.aVal);}
@@ -422,6 +514,7 @@ function fmt(n){return (Math.round(n*10)/10).toFixed(1);}
 function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
 function drawOverlay(a){
   const lw=Math.max(2,W/360);
+  if(mode==='tap1'){ctx.fillStyle='rgba(0,0,0,.25)'; ctx.fillRect(0,0,W,H); return;}
   if(mode==='pickA'||mode==='pickB'){
     ctx.fillStyle='rgba(0,0,0,.35)'; ctx.fillRect(0,0,W,H);
     if(mode==='pickB'){const {A}=pts(); dot(A,'#ffbf2e','A');}
@@ -532,10 +625,13 @@ let lastStateText='';
 function renderStatus(){
   let t='카메라 꺼짐', cls='', hint='카메라를 시작하세요.', warn=false;
   if(running){
-    if(mode==='pickA'){t='기준점 지정'; hint='A점: 눈금자 위, 눈금선이 촘촘한 가장자리를 따라 아래쪽 끝(롤러쪽)을 터치하세요. 그 지점의 눈금값을 A점 값으로 입력합니다.'; warn=true;}
+    if(mode==='tap1'){t='자동 설정'; hint='줄자에서 숫자(예: 20) 바로 옆의 긴 눈금선 하나를 터치하세요. 줄자는 가려지지 않은 상태여야 합니다.'; warn=true;}
+    else if(mode==='confirm'){t='설정 확인'; hint='라벨이 줄자 숫자와 맞는지 확인 후 "맞음 · 완료"를 누르세요. 라벨 200 = 줄자 20(cm) 위치입니다.'; warn=true;}
+    else if(mode==='pickA'){t='기준점 지정'; hint='A점: 눈금자 위, 눈금선이 촘촘한 가장자리를 따라 아래쪽 끝(롤러쪽)을 터치하세요. 그 지점의 눈금값을 A점 값으로 입력합니다.'; warn=true;}
     else if(mode==='pickB'){t='기준점 지정'; hint='B점: 같은 눈금자 가장자리를 따라 위로, 가장 큰 유리의 윗변보다 더 위쪽을 터치하세요. 그 지점의 눈금값을 B점 값으로 입력합니다.'; warn=true;}
-    else if(!S.lineSet){t='설정 필요'; hint='"기준점 지정"을 눌러 측정선을 만드세요.'; warn=true;}
-    else if(!lineOk()){t='설정 확인'; hint='A·B 눈금값이 같거나 두 점이 너무 가깝습니다.'; warn=true;}
+    else if(!S.lineSet){t='설정 필요'; hint='"자동 설정"을 누르고 줄자 숫자 하나만 터치하세요.'; warn=true;}
+    else if(!lineOk()){t='설정 확인'; const {A,B}=pts();
+      hint=Math.hypot(B.x-A.x,B.y-A.y)<40?'A점과 B점이 너무 가깝습니다. "자동 설정"을 다시 해주세요.':'A점 값과 B점 값이 같습니다. 설정에서 두 지점의 실제 눈금값을 다르게 입력하세요.'; warn=true;}
     else if(!bg){t='배경 필요'; hint='유리가 없어 눈금자가 다 보이는 상태에서 "눈금자 기준 저장"을 누르세요. A·B 눈금값도 확인하세요.'; warn=true;}
     else if(!tgtOk()){t='설정값 필요'; hint='모델을 눌러 "편집"에서 설정값(mm)을 입력하세요.'; warn=true;}
     else if(!armed){t='정지'; hint='모델과 빨간 설정 라인을 확인하고 "▶ 시작"을 누르세요. 정지 중에도 인식 눈금은 표시됩니다.'; warn=true;}
@@ -593,6 +689,7 @@ function loop(){
     const p=sample();
     if(p){
       if(bg&&bg.length!==p.length) bg=null;
+      if(pendingBg){bg=Float32Array.from(p); pendingBg=false; state='ready'; buf=[]; absent=99;}
       lastProfile=p;
       if(bg){a=analyze(p); process(a,p);}
     }
