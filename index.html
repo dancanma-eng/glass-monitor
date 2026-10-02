@@ -49,6 +49,7 @@ button{cursor:pointer}
 .rbar button.primary{background:#1f8a4c;border-color:#1f8a4c}
 .panel{flex:0 0 auto;display:flex;flex-direction:column;gap:6px}
 .rulering .readout,.rulering .strip,.rulering .actions{display:none}
+.teaching .strip,.teaching .actions{display:none}
 .hint{margin:0;padding:6px 10px;border-left:4px solid var(--accent);background:var(--panel);border-radius:0 8px 8px 0;font-size:13px}
 .hint.warn{border-color:var(--band)}
 
@@ -160,6 +161,10 @@ button{cursor:pointer}
         </div>
         <div class="row"><button id="r_center">가운데 세로 배치</button><button id="r_cancel">취소</button><button id="r_ok" class="primary">완료</button></div>
       </div>
+      <div id="tbar" class="rbar" hidden>
+        <div id="tMsg"></div>
+        <div class="row"><button id="t_cancel">취소</button><button id="t_ok" class="primary">학습 완료</button></div>
+      </div>
       <p id="hint" class="hint">카메라를 시작하세요.</p>
       <div id="readout" class="readout">
         <div class="row1">
@@ -222,6 +227,7 @@ button{cursor:pointer}
         <label>설정값 (mm)<input id="e_target" type="number" step="0.5" inputmode="decimal"></label>
         <label>허용 오차 ± (mm)<input id="e_tol" type="number" step="0.5" min="0" inputmode="decimal"></label>
       </div>
+      <button id="e_teach" class="btn" style="width:100%;margin-top:10px;border-color:var(--ok);color:var(--ok)">정상 유리로 학습 (설정값 자동 입력)</button>
       <div class="row"><button id="e_save" class="btn primary">저장</button><button id="e_del" class="btn">삭제</button><button id="e_cancel" class="btn">취소</button></div>
     </div>
     <p class="note">모델을 누르면 선택되고, "편집"에서 설정값과 허용 오차를 바꿀 수 있습니다. 설정값은 눈금자 범위 안에 있어야 합니다.</p>
@@ -243,7 +249,7 @@ const video=document.createElement('video'); video.muted=true; video.playsInline
 
 /* ---------- 저장 설정 ---------- */
 const KEY='glassgauge.v2';
-const DEF_MODELS=[{name:'M3',target:null,tol:2},{name:'25M3',target:null,tol:2},{name:'M6',target:null,tol:2},{name:'26M6',target:null,tol:2},{name:'VF best',target:null,tol:2},{name:'VF better X',target:null,tol:2}];
+const DEF_MODELS=[{name:'M3',target:null,tol:4},{name:'25M3',target:null,tol:4},{name:'M6',target:null,tol:4},{name:'26M6',target:null,tol:4},{name:'VF best',target:null,tol:4},{name:'VF better X',target:null,tol:4}];
 const DEF={ax:.5,ay:.92,bx:.5,by:.08,lineSet:false,start:0,range:300,sens:.2,stable:6,band:4,cover:45,hold:true,okBeep:true,cur:0,models:DEF_MODELS};
 let S=JSON.parse(JSON.stringify(DEF));
 try{
@@ -257,7 +263,7 @@ let W=view.width, H=view.height, running=false, mode='run', armed=false;
 let bg=null, lastProfile=null, pendingBg=false;
 let state='ready', buf=[], absent=99, liveMm=null, decided=null, hadValues=false;
 const counts={pass:0,ok:0,ng:0}, log=[];
-let target=null, tol=2;
+let target=null, tol=2, teach=null;
 const endVal=()=>S.start+S.range;
 const tgtOk=()=>target!=null&&isFinite(target);
 const inRange=()=>tgtOk()&&target>=Math.min(S.start,endVal())&&target<=Math.max(S.start,endVal());
@@ -318,7 +324,7 @@ $('#startBtn').addEventListener('click',async()=>{
 /* ---------- 가상 눈금자 설정 (시작점·끝점 끌어 옮기기) ---------- */
 let saved=null, drag=null;
 function openRuler(){
-  setArmed(false); saved={ax:S.ax,ay:S.ay,bx:S.bx,by:S.by,start:S.start,range:S.range};
+  if(teach) endTeach(); setArmed(false); saved={ax:S.ax,ay:S.ay,bx:S.bx,by:S.by,start:S.start,range:S.range};
   $('#r_start').value=S.start; $('#r_range').value=S.range;
   mode='ruler'; $('#rbar').hidden=false; document.body.classList.add('rulering');
 }
@@ -408,7 +414,10 @@ function process(a,p){
       hadValues=true; buf.push(liveMm); if(buf.length>S.stable) buf.shift();
       if(buf.length>=S.stable){
         const span=Math.max(...buf)-Math.min(...buf);
-        if(armed && inRange() && span<=Math.max(1.5,mmPerPx()*3)) decide(median(buf));
+        if(span<=Math.max(1.5,mmPerPx()*3)){
+          if(teach) teachRecord(median(buf));
+          else if(armed && inRange()) decide(median(buf));
+        }
       }
     }
   }else{
@@ -420,6 +429,33 @@ function process(a,p){
     if(absent>15 && state==='ready'){for(let i=0;i<bg.length;i++) bg[i]+=(p[i]-bg[i])*.02;}
   }
 }
+function teachRecord(mm){
+  state='decided'; decided=null; teach.vals.push(mm); tone(1500,.09,.35,'sine'); renderTeach();
+}
+function teachAvg(){return teach.vals.reduce((a,b)=>a+b,0)/teach.vals.length;}
+function renderTeach(){
+  const m=S.models[teach.idx], n=teach.vals.length;
+  $('#tMsg').innerHTML='<b>'+esc(m.name)+'</b> 학습 중 · 정상 유리를 통과시키세요. 2~3장 통과시키면 더 정확합니다.<br>'+
+    (n?'통과 <b>'+n+'장</b> · 평균 <b>'+fmt(teachAvg())+' mm</b> (최소 '+fmt(Math.min(...teach.vals))+' / 최대 '+fmt(Math.max(...teach.vals))+')':'아직 통과한 유리가 없습니다.');
+}
+function startTeach(idx){
+  if(!running||!lineOk()||!bg){alert('먼저 카메라 시작 → 눈금자 설정 → 흰 배경 저장을 해주세요.'); return;}
+  setArmed(false); teach={idx,vals:[]}; state='ready'; buf=[];
+  $('#msheet').hidden=true; $('#tbar').hidden=false; document.body.classList.add('teaching'); renderTeach();
+}
+function endTeach(){teach=null; $('#tbar').hidden=true; document.body.classList.remove('teaching'); state='ready'; buf=[];}
+$('#t_cancel').addEventListener('click',endTeach);
+$('#t_ok').addEventListener('click',()=>{
+  if(!teach.vals.length){alert('아직 통과한 유리가 없습니다. 정상 유리를 한 장 이상 통과시켜 주세요.'); return;}
+  const m=S.models[teach.idx], avg=Math.round(teachAvg()*10)/10, spread=Math.max(...teach.vals)-Math.min(...teach.vals);
+  m.target=avg; if(!(m.tol>=4)) m.tol=4; S.cur=teach.idx;
+  const msg=m.name+' 학습 완료: 설정값 '+fmt(avg)+' mm, 허용 ± '+fmt(m.tol)+' mm'+(spread>m.tol?'\n\n주의: 통과한 유리끼리 차이가 '+fmt(spread)+' mm로 큽니다. 카메라 고정 상태나 조명을 확인한 뒤 다시 학습하세요.':'');
+  endTeach(); syncModel(); alert(msg);
+});
+$('#e_teach').addEventListener('click',()=>{
+  if(editIdx<0){alert('먼저 모델을 저장한 뒤 학습하세요.'); return;}
+  startTeach(editIdx);
+});
 function decide(mm){
   state='decided'; decided=mm; counts.pass++;
   const ok=Math.abs(mm-target)<=tol;
@@ -555,7 +591,8 @@ let lastKey='';
 function renderStatus(){
   let t='카메라 꺼짐', cls='', hint='카메라를 시작하세요.', warn=false;
   if(running){
-    if(mode==='ruler'){t='눈금자 설정'; hint='시작점(초록)은 유리 아래쪽(롤러쪽), 끝점(노랑)은 위쪽에 두세요. 흰 배경판에 범위만큼 떨어진 표시를 해두고 두 점을 맞추면 정확합니다.'; warn=true;}
+    if(teach&&mode==='run'){t='학습 중'; cls='run'; hint=state==='measuring'?'유리 인식 중… 값이 안정되면 기록합니다.':'정상 유리가 지나가기를 기다리는 중입니다. 학습 중에는 판정·알람이 없습니다.';}
+    else if(mode==='ruler'){t='눈금자 설정'; hint='시작점(초록)은 유리 아래쪽(롤러쪽), 끝점(노랑)은 위쪽에 두세요. 흰 배경판에 범위만큼 떨어진 표시를 해두고 두 점을 맞추면 정확합니다.'; warn=true;}
     else if(!lineOk()){t='설정 필요'; hint='"눈금자 설정"을 눌러 가상 눈금자를 만드세요.'; warn=true;}
     else if(!bg){t='배경 필요'; hint='유리가 없는 상태에서 "흰 배경 저장"을 누르세요.'; warn=true;}
     else if(!tgtOk()){t='설정값 필요'; hint='모델을 눌러 "편집"에서 설정값(mm)을 입력하세요.'; warn=true;}
@@ -572,7 +609,8 @@ function renderStatus(){
   if(state==='decided'&&tgtOk()){
     const ok=Math.abs(decided-target)<=tol, d=decided-target;
     v.innerHTML=(ok?'GOOD':'NG')+'<small>'+(d>0?'+':'')+fmt(d)+' mm</small>'; v.className='verdict '+(ok?'ok':'ng'); ro.className='readout '+(ok?'ok':'ng');
-  }else if(state==='measuring'&&armed){v.innerHTML='측정 중'; v.className='verdict run'; ro.className='readout';}
+  }else if(teach){v.innerHTML='학습 중'; v.className='verdict run'; ro.className='readout';}
+  else if(state==='measuring'&&armed){v.innerHTML='측정 중'; v.className='verdict run'; ro.className='readout';}
   else{v.innerHTML=armed?'감시 중':'정지'; v.className='verdict'+(armed?' run':''); ro.className='readout';}
   const nd=$('#needle');
   if(liveMm==null||!tgtOk()) nd.hidden=true;
@@ -599,7 +637,7 @@ function renderLog(){
 
 /* ---------- 모델 ---------- */
 function syncModel(){
-  if(!S.models.length) S.models.push({name:'새 모델',target:null,tol:2});
+  if(!S.models.length) S.models.push({name:'새 모델',target:null,tol:4});
   if(S.cur>=S.models.length) S.cur=0;
   const m=curModel(); target=(m.target==null||m.target==='')?null:+m.target; tol=+m.tol||0;
   $('#mName').textContent=m.name; $('#mVal').textContent=tgtOk()?fmt(target)+' ± '+fmt(tol)+' mm':'설정값 입력 필요';
@@ -610,9 +648,9 @@ function renderModels(){
   $('#mList').innerHTML=S.models.map((m,i)=>'<div class="mitem'+(i===S.cur?' sel':'')+'"><button class="pick" data-i="'+i+'"><b>'+esc(m.name)+'</b><small>'+(m.target==null||m.target===''?'설정값 없음':fmt(+m.target)+' ± '+fmt(+m.tol)+' mm')+'</small></button><button class="ed" data-e="'+i+'">편집</button></div>').join('');
 }
 function openEdit(i){
-  editIdx=i; const m=i>=0?S.models[i]:{name:'',target:'',tol:2};
+  editIdx=i; const m=i>=0?S.models[i]:{name:'',target:'',tol:4};
   $('#e_name').value=m.name; $('#e_target').value=m.target==null?'':m.target; $('#e_tol').value=m.tol;
-  $('#e_del').hidden=i<0; $('#mEdit').hidden=false;
+  $('#e_del').hidden=i<0; $('#e_teach').hidden=i<0; $('#mEdit').hidden=false;
 }
 $('#modelBtn').addEventListener('click',()=>{renderModels(); $('#mEdit').hidden=true; $('#msheet').hidden=false;});
 $('#mClose').addEventListener('click',()=>{$('#msheet').hidden=true;});
@@ -627,7 +665,7 @@ $('#e_cancel').addEventListener('click',()=>{$('#mEdit').hidden=true;});
 $('#e_save').addEventListener('click',()=>{
   const name=$('#e_name').value.trim(); if(!name){$('#e_name').focus(); return;}
   const tv=parseFloat($('#e_target').value), tl=parseFloat($('#e_tol').value);
-  const m={name,target:isNaN(tv)?null:tv,tol:isNaN(tl)?2:tl};
+  const m={name,target:isNaN(tv)?null:tv,tol:isNaN(tl)?4:tl};
   if(editIdx<0){S.models.push(m); S.cur=S.models.length-1;} else S.models[editIdx]=m;
   $('#mEdit').hidden=true; syncModel(); renderModels();
 });
