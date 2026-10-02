@@ -11,97 +11,101 @@
 <style>
 :root{
   --bg:#e7ecee; --panel:#f8fafb; --ink:#1b272d; --muted:#5a6a72; --line:#c9d3d7;
-  --ok:#11804c; --ng:#d2231b; --band:#e9a400; --accent:#1f5f8b; --glass:#cfe6e4;
+  --ok:#11804c; --ng:#d2231b; --band:#e9a400; --accent:#1f5f8b;
   box-sizing:border-box;
   padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
 }
 @media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --bg:#11181b; --panel:#1a2327; --ink:#e8eef0; --muted:#93a4ab; --line:#2c3a40;
-    --ok:#2bc47a; --ng:#ff4a40; --band:#ffbf2e; --accent:#6fb2e0; --glass:#264240;
-  }
+  :root:not([data-theme="light"]){--bg:#11181b; --panel:#1a2327; --ink:#e8eef0; --muted:#93a4ab; --line:#2c3a40; --ok:#2bc47a; --ng:#ff4a40; --band:#ffbf2e; --accent:#6fb2e0;}
 }
-:root[data-theme="dark"]{
-  --bg:#11181b; --panel:#1a2327; --ink:#e8eef0; --muted:#93a4ab; --line:#2c3a40;
-  --ok:#2bc47a; --ng:#ff4a40; --band:#ffbf2e; --accent:#6fb2e0; --glass:#264240;
-}
+:root[data-theme="dark"]{--bg:#11181b; --panel:#1a2327; --ink:#e8eef0; --muted:#93a4ab; --line:#2c3a40; --ok:#2bc47a; --ng:#ff4a40; --band:#ffbf2e; --accent:#6fb2e0;}
+html,body{height:100%}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
 *,*::before,*::after{box-sizing:inherit}
 [hidden]{display:none!important}
-body{margin:0;background:var(--bg);color:var(--ink);
-  font-family:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
-  font-size:15px;line-height:1.45}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;font-size:14px;line-height:1.4}
 button,input{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 
-.wrap{max-width:1180px;margin:0 auto;padding:12px}
-.top{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-.top h1{font-size:17px;margin:0;font-weight:700;letter-spacing:-.01em}
-.state{margin-left:auto;font-weight:600;font-size:13px;padding:4px 10px;border-radius:999px;
-  background:var(--panel);border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.app{height:100%;display:flex;flex-direction:column;padding:6px 8px 8px;gap:6px;max-width:1200px;margin:0 auto}
+.top{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.top h1{font-size:15px;margin:0;font-weight:700}
+.state{margin-left:auto;font-weight:600;font-size:12px;padding:3px 9px;border-radius:999px;background:var(--panel);border:1px solid var(--line);color:var(--muted);white-space:nowrap}
 .state.ok{color:var(--ok);border-color:var(--ok)}
 .state.ng{color:#fff;background:var(--ng);border-color:var(--ng)}
 .state.run{color:var(--accent);border-color:var(--accent)}
+.icon{border:1px solid var(--line);background:var(--panel);border-radius:8px;min-width:40px;height:34px;font-size:13px;font-weight:600;padding:0 10px}
 
-.grid{display:grid;gap:12px}
-@media (min-width:860px){.grid{grid-template-columns:1.35fr 1fr;align-items:start}}
-
-.cam{position:relative;background:#000;border-radius:10px;overflow:hidden;aspect-ratio:16/9}
-.cam canvas{display:block;width:100%;height:100%;object-fit:contain;touch-action:none}
-.cam .empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:12px;color:#d9e3e6;text-align:center;padding:20px}
-.hint{margin:8px 0 0;padding:9px 12px;border-left:4px solid var(--accent);background:var(--panel);
-  border-radius:0 8px 8px 0;font-size:14px}
+.stage{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:6px}
+.cam{position:relative;flex:1 1 auto;min-height:30vh;background:#000;border-radius:10px;overflow:hidden}
+.cam canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;touch-action:none;display:block}
+.cam .empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#d9e3e6;text-align:center;padding:16px}
+.panel{flex:0 0 auto;display:flex;flex-direction:column;gap:6px}
+.hint{margin:0;padding:6px 10px;border-left:4px solid var(--accent);background:var(--panel);border-radius:0 8px 8px 0;font-size:13px}
 .hint.warn{border-color:var(--band)}
 
-.readout{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
-.readout.ok{border-color:var(--ok);box-shadow:inset 0 0 0 2px var(--ok)}
-.readout.ng{border-color:var(--ng);box-shadow:inset 0 0 0 2px var(--ng)}
-.big{display:flex;align-items:baseline;gap:8px}
-.big b{font-size:clamp(56px,13vw,92px);line-height:1;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.03em}
-.big span{font-size:22px;color:var(--muted)}
-.verdict{font-size:20px;font-weight:700;margin-top:4px;min-height:1.4em}
-.verdict.ok{color:var(--ok)} .verdict.ng{color:var(--ng)}
-.gauge{position:relative;height:18px;margin:14px 0 4px;background:var(--bg);border-radius:4px;border:1px solid var(--line)}
+.readout{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.readout.ok{box-shadow:inset 0 0 0 3px var(--ok)}
+.readout.ng{box-shadow:inset 0 0 0 3px var(--ng)}
+.row1{display:flex;align-items:center;gap:10px}
+.live small{display:block;font-size:12px;color:var(--muted)}
+.big{display:flex;align-items:baseline;gap:6px}
+.big b{font-size:clamp(44px,12vw,72px);line-height:1;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+.big span{font-size:18px;color:var(--muted)}
+.verdict{margin-left:auto;text-align:center;min-width:96px;padding:8px 10px;border-radius:10px;background:var(--bg);font-weight:700;font-size:18px;color:var(--muted)}
+.verdict small{display:block;font-size:12px;font-weight:600}
+.verdict.ok{background:var(--ok);color:#fff}
+.verdict.ng{background:var(--ng);color:#fff}
+.verdict.run{color:var(--accent)}
+.gauge{position:relative;height:14px;margin:8px 0 2px;background:var(--bg);border-radius:4px;border:1px solid var(--line)}
 .gauge .bandz{position:absolute;top:0;bottom:0;background:var(--band);opacity:.55}
-.gauge .needle{position:absolute;top:-5px;bottom:-5px;width:4px;margin-left:-2px;background:var(--ink);border-radius:2px;transition:left .12s}
-.gscale{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
-.ref{font-size:14px;color:var(--muted);margin-top:6px}
-.counts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
-.counts div{background:var(--bg);border-radius:8px;padding:6px 8px;text-align:center}
-.counts small{display:block;color:var(--muted);font-size:12px}
-.counts strong{font-size:22px;font-variant-numeric:tabular-nums}
-.counts .c-ng strong{color:var(--ng)} .counts .c-ok strong{color:var(--ok)}
+.gauge .needle{position:absolute;top:-4px;bottom:-4px;width:4px;margin-left:-2px;background:var(--ink);border-radius:2px}
+.gscale{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.last{font-size:13px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums}
+.last b{color:var(--ink)} .last .ok{color:var(--ok);font-weight:700} .last .ng{color:var(--ng);font-weight:700} .last .na{color:var(--band);font-weight:700}
 
-.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
-.btn{border:1px solid var(--line);background:var(--panel);border-radius:9px;padding:12px 10px;font-weight:600;min-height:48px}
+.strip{display:grid;grid-template-columns:1fr 1fr 1.6fr;gap:6px}
+.strip label{display:flex;flex-direction:column;font-size:11px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px 8px}
+.strip input{border:0;background:transparent;font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;width:100%;padding:0}
+.counts{display:grid;grid-template-columns:repeat(3,1fr);background:var(--panel);border:1px solid var(--line);border-radius:8px}
+.counts div{text-align:center;padding:4px 2px}
+.counts small{display:block;color:var(--muted);font-size:11px}
+.counts strong{font-size:18px;font-variant-numeric:tabular-nums}
+.counts .c-ng strong{color:var(--ng)} .counts .c-ok strong{color:var(--ok)}
+.actions{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:8px 4px;font-weight:600;font-size:13px;min-height:44px;line-height:1.2}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 
-details{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-top:12px}
-summary{padding:12px 14px;font-weight:700;cursor:pointer}
-.form{padding:0 14px 14px;display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
-.form label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
-.form input[type=number]{border:1px solid var(--line);background:var(--bg);border-radius:7px;padding:9px 10px;font-size:17px;
-  font-variant-numeric:tabular-nums;width:100%}
+@media (orientation:landscape) and (min-width:700px){
+  .stage{flex-direction:row}
+  .cam{min-height:0}
+  .panel{width:380px;overflow-y:auto}
+}
+
+.sheet{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}
+.sheet .box{background:var(--panel);width:100%;max-width:560px;max-height:88%;overflow-y:auto;border-radius:14px 14px 0 0;padding:12px 14px calc(14px + env(safe-area-inset-bottom,0px))}
+.sheet h2{font-size:16px;margin:0 0 8px;display:flex;align-items:center}
+.sheet h2 button{margin-left:auto}
+.sheet h3{font-size:13px;margin:14px 0 6px;color:var(--muted)}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}
+.form label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
+.form input[type=number]{border:1px solid var(--line);background:var(--bg);border-radius:7px;padding:8px 10px;font-size:16px;font-variant-numeric:tabular-nums;width:100%}
 .form input[type=range]{width:100%;accent-color:var(--accent)}
 .form .full{grid-column:1/-1}
 .form .chk{flex-direction:row;align-items:center;gap:8px;color:var(--ink);font-size:14px}
 .form .chk input{width:20px;height:20px;accent-color:var(--accent)}
-.form .note{grid-column:1/-1;font-size:12px;color:var(--muted);margin:0}
-#graph{width:100%;height:90px;display:block;background:var(--bg);border-radius:7px}
-
-.log{list-style:none;margin:0;padding:0 14px 14px;max-height:260px;overflow:auto}
-.log li{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;font-size:14px}
+.note{font-size:12px;color:var(--muted);margin:4px 0 0}
+#graph{width:100%;height:80px;display:block;background:var(--bg);border-radius:7px}
+.log{list-style:none;margin:0;padding:0;max-height:220px;overflow:auto}
+.log li{display:flex;gap:10px;padding:5px 0;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;font-size:13px}
 .log li time{color:var(--muted)}
 .log li .k{margin-left:auto;font-weight:700}
 .log .ok{color:var(--ok)} .log .ng{color:var(--ng)} .log .na{color:var(--band)}
 
-.alarm{position:fixed;inset:0;z-index:50;background:var(--ng);color:#fff;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;text-align:center;gap:10px;padding:24px;
-  padding-top:calc(24px + env(safe-area-inset-top,0px));padding-bottom:calc(24px + env(safe-area-inset-bottom,0px));
-  animation:flash .5s steps(2) infinite}
+.alarm{position:fixed;inset:0;z-index:50;background:var(--ng);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;padding:24px;
+  padding-top:calc(24px + env(safe-area-inset-top,0px));padding-bottom:calc(24px + env(safe-area-inset-bottom,0px));animation:flash .5s steps(2) infinite}
 @keyframes flash{50%{background:#7a0f0a}}
 @media (prefers-reduced-motion:reduce){.alarm{animation:none}}
 .alarm h2{margin:0;font-size:clamp(30px,8vw,54px)}
@@ -111,75 +115,75 @@ summary{padding:12px 14px;font-weight:700;cursor:pointer}
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="app">
   <header class="top">
     <h1>복층유리 치수 감시</h1>
     <span id="state" class="state">카메라 꺼짐</span>
+    <button id="setBtn" class="icon" aria-label="설정 열기">설정</button>
   </header>
-
-  <div class="grid">
-    <section>
-      <div class="cam">
-        <canvas id="view" width="960" height="540" aria-label="카메라 화면"></canvas>
-        <div id="empty" class="empty">
-          <div>검사대 눈금지가 화면 가로로 길게 보이도록<br>폰·패드를 고정한 뒤 시작하세요.</div>
-          <button id="startBtn" class="btn primary">카메라 시작</button>
-          <div id="camErr" style="font-size:13px;max-width:420px"></div>
-        </div>
+  <div class="stage">
+    <div class="cam">
+      <canvas id="view" width="960" height="540" aria-label="카메라 화면"></canvas>
+      <div id="empty" class="empty">
+        <div>눈금자가 잘 보이도록 폰·패드를 고정한 뒤 시작하세요.</div>
+        <button id="startBtn" class="btn primary" style="padding:12px 22px">카메라 시작</button>
+        <div id="camErr" style="font-size:13px;max-width:420px"></div>
       </div>
+    </div>
+    <div class="panel">
       <p id="hint" class="hint">카메라를 시작하세요.</p>
-    </section>
-
-    <section>
       <div id="readout" class="readout">
-        <div class="big"><b id="val">—</b><span>mm</span></div>
-        <div id="verdict" class="verdict"></div>
+        <div class="row1">
+          <div class="live"><small>실시간 치수</small><div class="big"><b id="val">—</b><span>mm</span></div></div>
+          <div id="verdict" class="verdict">대기</div>
+        </div>
         <div class="gauge" aria-hidden="true"><div id="bandz" class="bandz"></div><div id="needle" class="needle" hidden></div></div>
         <div class="gscale"><span id="gmin"></span><span id="gmax"></span></div>
-        <div id="ref" class="ref"></div>
+        <div class="last">최근 판정 <b id="lastVal">—</b> <span id="lastK"></span></div>
+      </div>
+      <div class="strip">
+        <label>정상 치수<input id="f_target" type="number" step="0.5" inputmode="decimal"></label>
+        <label>허용 ±<input id="f_tol" type="number" step="0.5" min="0" inputmode="decimal"></label>
         <div class="counts">
           <div><small>통과</small><strong id="cPass">0</strong></div>
           <div class="c-ok"><small>정상</small><strong id="cOk">0</strong></div>
           <div class="c-ng"><small>불량</small><strong id="cNg">0</strong></div>
         </div>
       </div>
-
       <div class="actions">
-        <button id="pickBtn" class="btn" disabled>눈금 기준점 지정</button>
-        <button id="bgBtn" class="btn" disabled>눈금자 기준 저장</button>
-        <button id="testBtn" class="btn">알람 테스트</button>
-        <button id="resetBtn" class="btn">카운트 초기화</button>
+        <button id="pickBtn" class="btn" disabled>기준점<br>지정</button>
+        <button id="bgBtn" class="btn" disabled>눈금자<br>기준 저장</button>
+        <button id="testBtn" class="btn">알람<br>테스트</button>
+        <button id="resetBtn" class="btn">카운트<br>초기화</button>
       </div>
+    </div>
+  </div>
+</div>
 
-      <details open>
-        <summary>치수 기준</summary>
-        <div class="form">
-          <label>정상 치수 (mm)<input id="f_target" type="number" step="0.5" inputmode="decimal"></label>
-          <label>허용 오차 ± (mm)<input id="f_tol" type="number" step="0.5" min="0" inputmode="decimal"></label>
-          <label>A점 눈금값 (롤러쪽)<input id="f_aVal" type="number" step="1" inputmode="decimal"></label>
-          <label>B점 눈금값 (위쪽)<input id="f_bVal" type="number" step="1" inputmode="decimal"></label>
-          <label class="chk full"><input id="f_hold" type="checkbox"> 불량 알람은 확인 버튼을 누를 때까지 계속 울림</label>
-          <label class="chk full"><input id="f_okBeep" type="checkbox"> 정상일 때 짧은 확인음</label>
-        </div>
-      </details>
-
-      <details>
-        <summary>인식 조정</summary>
-        <div class="form">
-          <label class="full">눈금 일치 기준 (높을수록 엄격) <output id="o_match"></output><input id="f_match" type="range" min="0.2" max="0.9" step="0.05"></label>
-          <label class="full">판정에 필요한 안정 프레임 <output id="o_stable"></output><input id="f_stable" type="range" min="3" max="20" step="1"></label>
-          <label class="full">측정선 두께 (px) <output id="o_band"></output><input id="f_band" type="range" min="1" max="8" step="1"></label>
-          <label class="full">유리 채움 비율 (%) <output id="o_cover"></output><input id="f_cover" type="range" min="20" max="90" step="5"></label>
-          <div class="full"><canvas id="graph" width="600" height="90"></canvas></div>
-          <p class="note">그래프는 눈금자가 가려진 정도입니다(왼쪽이 A점). 유리가 없을 때는 전체가 노란 선 아래, 유리가 지나갈 때는 가려진 구간이 노란 선 위로 확실히 올라오도록 기준을 맞추세요.</p>
-        </div>
-      </details>
-
-      <details>
-        <summary>측정 기록</summary>
-        <ul id="log" class="log"><li style="color:var(--muted)">아직 기록이 없습니다.</li></ul>
-      </details>
-    </section>
+<div id="sheet" class="sheet" hidden>
+  <div class="box" role="dialog" aria-labelledby="sheetTitle">
+    <h2 id="sheetTitle">설정 <button id="closeBtn" class="icon">닫기</button></h2>
+    <h3>눈금 기준점</h3>
+    <div class="form">
+      <label>A점 눈금값 (롤러쪽)<input id="f_aVal" type="number" step="1" inputmode="decimal"></label>
+      <label>B점 눈금값 (위쪽)<input id="f_bVal" type="number" step="1" inputmode="decimal"></label>
+    </div>
+    <h3>알람</h3>
+    <div class="form">
+      <label class="chk full"><input id="f_hold" type="checkbox"> 불량 알람은 확인 버튼을 누를 때까지 계속 울림</label>
+      <label class="chk full"><input id="f_okBeep" type="checkbox"> 정상일 때 짧은 확인음</label>
+    </div>
+    <h3>인식 조정</h3>
+    <div class="form">
+      <label class="full">눈금 일치 기준 (높을수록 엄격) <output id="o_match"></output><input id="f_match" type="range" min="0.2" max="0.9" step="0.05"></label>
+      <label class="full">판정에 필요한 안정 프레임 <output id="o_stable"></output><input id="f_stable" type="range" min="3" max="20" step="1"></label>
+      <label class="full">측정선 두께 (px) <output id="o_band"></output><input id="f_band" type="range" min="1" max="8" step="1"></label>
+      <label class="full">유리 채움 비율 (%) <output id="o_cover"></output><input id="f_cover" type="range" min="20" max="90" step="5"></label>
+      <div class="full"><canvas id="graph" width="600" height="80"></canvas></div>
+    </div>
+    <p class="note">그래프는 눈금자가 가려진 정도입니다(왼쪽이 A점). 유리가 없을 때는 전체가 노란 선 아래, 유리가 지나갈 때는 가려진 구간이 노란 선 위로 올라오도록 기준을 맞추세요.</p>
+    <h3>측정 기록</h3>
+    <ul id="log" class="log"><li style="color:var(--muted)">아직 기록이 없습니다.</li></ul>
   </div>
 </div>
 
@@ -189,7 +193,6 @@ summary{padding:12px 14px;font-weight:700;cursor:pointer}
   <p id="alarmRef"></p>
   <button id="ackBtn">확인 · 알람 정지</button>
 </div>
-
 <script>
 (function(){
 const $=s=>document.querySelector(s);
@@ -261,7 +264,7 @@ $('#startBtn').addEventListener('click',async()=>{
     video.srcObject=stream; await video.play();
     const vw=video.videoWidth||1280, vh=video.videoHeight||720, sc=Math.min(1,960/Math.max(vw,vh));
     view.width=W=Math.round(vw*sc); view.height=H=Math.round(vh*sc);
-    $('.cam').style.aspectRatio=W+'/'+H;
+    
     $('#empty').hidden=true; $('#pickBtn').disabled=false; $('#bgBtn').disabled=!S.lineSet;
     running=true; keepAwake(); requestAnimationFrame(loop);
   }catch(e){
@@ -273,8 +276,9 @@ $('#startBtn').addEventListener('click',async()=>{
 $('#pickBtn').addEventListener('click',()=>{mode='pickA'; bg=null; setState('setup');});
 view.addEventListener('pointerdown',e=>{
   if(mode!=='pickA'&&mode!=='pickB') return;
-  const r=view.getBoundingClientRect();
-  const x=(e.clientX-r.left)/r.width, y=(e.clientY-r.top)/r.height;
+  const r=view.getBoundingClientRect(), sc=Math.min(r.width/W,r.height/H), cw=W*sc, ch=H*sc;
+  const x=(e.clientX-r.left-(r.width-cw)/2)/cw, y=(e.clientY-r.top-(r.height-ch)/2)/ch;
+  if(x<0||x>1||y<0||y>1) return;
   if(mode==='pickA'){S.ax=x;S.ay=y;mode='pickB';}
   else{S.bx=x;S.by=y;mode='run';S.lineSet=true;$('#bgBtn').disabled=false;}
   save();
@@ -392,6 +396,11 @@ function drawOverlay(a){
     const L=Math.hypot(B.x-A.x,B.y-A.y), nx=-(B.y-A.y)/L, ny=(B.x-A.x)/L, len=H*.12;
     ctx.strokeStyle=ok?'#2bc47a':'#ff4a40'; ctx.lineWidth=lw*1.6;
     ctx.beginPath(); ctx.moveTo(e.x-nx*len,e.y-ny*len); ctx.lineTo(e.x+nx*len,e.y+ny*len); ctx.stroke();
+    const txt=fmt(idxToMm(a.edge,a.N)), fs=Math.round(Math.max(W,H)/16);
+    ctx.font='700 '+fs+'px system-ui,sans-serif'; const tw=ctx.measureText(txt).width;
+    let tx=e.x+nx*len+8, ty=e.y+ny*len; tx=Math.max(4,Math.min(W-tw-12,tx)); ty=Math.max(fs,Math.min(H-8,ty));
+    ctx.fillStyle='rgba(0,0,0,.65)'; ctx.fillRect(tx-6,ty-fs,tw+12,fs*1.2);
+    ctx.fillStyle=ok?'#2bc47a':'#ff4a40'; ctx.fillText(txt,tx,ty-fs*.05);
   }
 }
 function dot(p,c,label){
@@ -414,7 +423,7 @@ function renderStatus(){
   if(running){
     if(mode==='pickA'){t='기준점 지정'; hint='A점: 눈금자 위, 눈금선이 촘촘한 가장자리를 따라 아래쪽 끝(롤러쪽)을 터치하세요. 그 지점의 눈금값을 A점 값으로 입력합니다.'; warn=true;}
     else if(mode==='pickB'){t='기준점 지정'; hint='B점: 같은 눈금자 가장자리를 따라 위로, 가장 큰 유리의 윗변보다 더 위쪽을 터치하세요. 그 지점의 눈금값을 B점 값으로 입력합니다.'; warn=true;}
-    else if(!S.lineSet){t='설정 필요'; hint='"눈금 기준점 지정"을 눌러 측정선을 만드세요.'; warn=true;}
+    else if(!S.lineSet){t='설정 필요'; hint='"기준점 지정"을 눌러 측정선을 만드세요.'; warn=true;}
     else if(!lineOk()){t='설정 확인'; hint='A·B 눈금값이 같거나 두 점이 너무 가깝습니다.'; warn=true;}
     else if(!bg){t='배경 필요'; hint='유리가 없어 눈금자가 다 보이는 상태에서 "눈금자 기준 저장"을 누르세요. A·B 눈금값도 확인하세요.'; warn=true;}
     else if(state==='measuring'){t='측정 중'; cls='run'; hint='유리 인식 중… 값이 안정되면 판정합니다.';}
@@ -427,11 +436,14 @@ function renderStatus(){
     const st=$('#state'); st.textContent=t; st.className='state '+cls;
     const h=$('#hint'); h.textContent=hint; h.className='hint'+(warn?' warn':'');
   }
-  const shown=state==='decided'?decided:liveMm;
+  const shown=liveMm;
   $('#val').textContent=shown==null?'—':fmt(shown);
   const v=$('#verdict'), ro=$('#readout');
-  if(state==='decided'){const ok=Math.abs(decided-S.target)<=S.tol; v.textContent=ok?'정상':'불량 · 기준 대비 '+(decided>S.target?'+':'')+fmt(decided-S.target)+' mm'; v.className='verdict '+(ok?'ok':'ng'); ro.className='readout '+(ok?'ok':'ng');}
-  else{v.textContent=state==='measuring'?'측정 중…':''; v.className='verdict'; ro.className='readout';}
+  if(state==='decided'){
+    const ok=Math.abs(decided-S.target)<=S.tol, d=decided-S.target;
+    v.innerHTML=(ok?'정상':'불량')+'<small>'+(d>0?'+':'')+fmt(d)+' mm</small>'; v.className='verdict '+(ok?'ok':'ng'); ro.className='readout '+(ok?'ok':'ng');
+  }else if(state==='measuring'){v.innerHTML='측정 중'; v.className='verdict run'; ro.className='readout';}
+  else{v.innerHTML='대기'; v.className='verdict'; ro.className='readout';}
   const lo=S.target-Math.max(S.tol*4,8), hi=S.target+Math.max(S.tol*4,8), nd=$('#needle');
   if(shown==null) nd.hidden=true; else {nd.hidden=false; nd.style.left=Math.max(0,Math.min(100,(shown-lo)/(hi-lo)*100))+'%';}
 }
@@ -439,11 +451,12 @@ function refreshStatic(){
   const lo=S.target-Math.max(S.tol*4,8), hi=S.target+Math.max(S.tol*4,8);
   const bz=$('#bandz'); bz.style.left=((S.target-S.tol-lo)/(hi-lo)*100)+'%'; bz.style.width=(2*S.tol/(hi-lo)*100)+'%';
   $('#gmin').textContent=fmt(lo); $('#gmax').textContent=fmt(hi);
-  $('#ref').textContent='정상 '+fmt(S.target)+' mm, 허용 '+fmt(S.target-S.tol)+' ~ '+fmt(S.target+S.tol)+' mm';
+  if($('#ref')) $('#ref').textContent='정상 '+fmt(S.target)+' mm, 허용 '+fmt(S.target-S.tol)+' ~ '+fmt(S.target+S.tol)+' mm';
   $('#o_match').textContent=' '+S.match; $('#o_stable').textContent=' '+S.stable; $('#o_band').textContent=' '+S.band; $('#o_cover').textContent=' '+S.cover;
 }
 function renderCounts(){$('#cPass').textContent=counts.pass; $('#cOk').textContent=counts.ok; $('#cNg').textContent=counts.ng;}
-function addLog(mm,k){log.unshift({t:new Date(),mm,k}); if(log.length>200) log.pop(); renderLog();}
+function addLog(mm,k){log.unshift({t:new Date(),mm,k}); if(log.length>200) log.pop(); renderLog();
+  $('#lastVal').textContent=mm==null?'—':fmt(mm)+' mm'; const lk=$('#lastK'); lk.textContent=k==='ok'?'정상':k==='ng'?'불량':'미판정'; lk.className=k;}
 function renderLog(){
   const ul=$('#log');
   if(!log.length){ul.innerHTML='<li style="color:var(--muted)">아직 기록이 없습니다.</li>'; return;}
@@ -469,6 +482,9 @@ function loop(){
   drawOverlay(a); drawGraph(a); renderStatus();
   requestAnimationFrame(loop);
 }
+$('#setBtn').addEventListener('click',()=>{$('#sheet').hidden=false;});
+$('#closeBtn').addEventListener('click',()=>{$('#sheet').hidden=true;});
+$('#sheet').addEventListener('click',e=>{if(e.target.id==='sheet') $('#sheet').hidden=true;});
 refreshStatic(); renderCounts(); renderStatus();
 })();
 if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
