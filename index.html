@@ -199,6 +199,11 @@ button{cursor:pointer}
       <label class="chk full"><input id="f_okBeep" type="checkbox"> GOOD일 때 짧은 확인음</label>
       <label class="chk full"><input id="f_zoom" type="checkbox"> 기준값 주변 근접 화면 표시</label>
     </div>
+    <h3>판정</h3>
+    <div class="form">
+      <label class="full">NG 판정 지연 (초) <output id="o_ngDelay"></output><input id="f_ngDelay" type="range" min="0.5" max="5" step="0.5"></label>
+    </div>
+    <p class="note">기준 범위 밖 상태가 이 시간 이상 계속되어야 NG입니다. 유리가 들어오고 나가는 순간의 흔들림은 무시됩니다.</p>
     <h3>인식 조정</h3>
     <div class="form">
       <label class="full">가림 감도 (낮을수록 민감) <output id="o_sens"></output><input id="f_sens" type="range" min="0.05" max="0.6" step="0.01"></label>
@@ -248,7 +253,7 @@ const video=document.createElement('video'); video.muted=true; video.playsInline
 /* ---------- 저장 설정 ---------- */
 const KEY='glassgauge.v2';
 const DEF_MODELS=[{name:'M3',target:null,tol:4},{name:'25M3',target:null,tol:4},{name:'M6',target:null,tol:4},{name:'26M6',target:null,tol:4},{name:'VF best',target:null,tol:4},{name:'VF better X',target:null,tol:4}];
-const DEF={zoom:true,xpos:.5,start:0,range:300,sens:.2,stable:6,band:4,gap:15,hold:true,okBeep:true,cur:0,models:DEF_MODELS};
+const DEF={ngDelay:2,zoom:true,xpos:.5,start:0,range:300,sens:.2,stable:6,band:4,gap:15,hold:true,okBeep:true,cur:0,models:DEF_MODELS};
 let S=JSON.parse(JSON.stringify(DEF));
 try{
   const j=localStorage.getItem(KEY);
@@ -270,7 +275,7 @@ function fmt(n){return (Math.round(n*10)/10).toFixed(1);}
 function esc(x){return String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
 /* ---------- 설정 입력 연결 ---------- */
-['sens','stable','band','gap','range','xpos'].forEach(k=>{
+['sens','stable','band','gap','range','xpos','ngDelay'].forEach(k=>{
   const el=$('#f_'+k); el.value=S[k];
   el.addEventListener('input',()=>{const v=parseFloat(el.value); if(isNaN(v)) return; S[k]=(k==='stable'||k==='band')?Math.round(v):v; if(k==='band') bg=null; if(k==='range'&&!(v>0)) return; if(k==='xpos'){bg=null; pendingBg=true;} save(); refreshStatic();});
 });
@@ -407,36 +412,61 @@ async function lockCamera(){
 
 /* ---------- 판정 ---------- */
 function median(a){const b=[...a].sort((x,y)=>x-y), m=b.length>>1; return b.length%2?b[m]:(b[m-1]+b[m])/2;}
+/* 한 장이 지나가는 동안의 판정
+   - 기준 범위 안에서 값이 안정되면 GOOD
+   - 범위 밖 상태가 'NG 판정 지연'(기본 2초) 이상 계속되면 NG (GOOD이었어도 NG로 바뀜)
+   - 진입·이탈 순간의 짧은 범위 밖은 무시
+   - 끝까지 GOOD이 안 나왔고 범위 밖이 계속 보였으면, 유리가 빠져나갈 때 NG */
+let pass=null, teachVals=[];
+function newPass(){return {inCnt:0,outSince:null,outFrames:0,good:false,ng:false,lastOut:null};}
 function process(a,p){
+  const now=performance.now();
   if(a.present){
     absent=0;
-    if(state==='ready'){state='measuring'; buf=[]; decided=null; hadValues=false;}
-    liveMm=idxToMm(a.edge,a.N);
-    if(state==='measuring'){
-      hadValues=true; buf.push(liveMm); if(buf.length>S.stable) buf.shift();
-      if(buf.length>=S.stable){
-        const span=Math.max(...buf)-Math.min(...buf);
-        if(span<=Math.max(1.5,mmPerPx()*3)){
-          if(teach) teachRecord(median(buf));
-          else if(armed && inRange()) decide(median(buf));
-        }
-      }
+    if(state==='ready'){state='measuring'; buf=[]; decided=null; hadValues=false; pass=newPass(); teachVals=[];}
+    liveMm=idxToMm(a.edge,a.N); hadValues=true;
+    buf.push(liveMm); if(buf.length>Math.max(5,S.stable)) buf.shift();
+    const v=median(buf.slice(-5));
+    if(teach){
+      if(buf.length>=S.stable){const w=buf.slice(-S.stable); if(Math.max(...w)-Math.min(...w)<=Math.max(1.5,mmPerPx()*3)) teachVals.push(median(w));}
+      return;
+    }
+    if(!(armed&&inRange())) return;
+    if(Math.abs(v-target)<=tol){
+      pass.outSince=null; pass.inCnt++;
+      if(!pass.good&&!pass.ng&&pass.inCnt>=S.stable){pass.good=true; markGood(v);}
+    }else{
+      pass.inCnt=0; pass.outFrames++; pass.lastOut=v; if(pass.outSince==null) pass.outSince=now;
+      if(!pass.ng&&now-pass.outSince>=S.ngDelay*1000){pass.ng=true; markNg(v);}
     }
   }else{
     absent++;
     if(absent>8 && (state==='measuring'||state==='decided')){
-      if(armed&&state==='measuring'&&hadValues){addLog(null,'na'); tone(520,.12,.5); setTimeout(()=>tone(520,.12,.5),180);}
-      state='ready'; buf=[]; liveMm=null;
+      if(teach){
+        if(teachVals.length) teachRecord(median(teachVals));
+      }else if(armed&&pass&&!pass.good&&!pass.ng&&hadValues){
+        if(pass.outFrames>=S.stable) markNg(pass.lastOut);
+        else{addLog(null,'na'); tone(520,.12,.5); setTimeout(()=>tone(520,.12,.5),180);}
+      }
+      state='ready'; buf=[]; liveMm=null; pass=null;
     }
     if(absent>15 && state==='ready'){for(let i=0;i<bg.length;i++) bg[i]+=(p[i]-bg[i])*.02;}
   }
 }
+function markGood(v){
+  state='decided'; decided=v; counts.pass++; counts.ok++; addLog(v,'ok'); if(S.okBeep) tone(1500,.09,.35,'sine'); renderCounts();
+}
+function markNg(v){
+  if(pass&&pass.good){counts.ok--; const r=log.find(x=>x.k==='ok'); if(r){r.k='ng'; r.mm=v;} renderLog(); $('#lastVal').textContent=fmt(v)+' mm'; $('#lastK').textContent='NG'; $('#lastK').className='ng';}
+  else{counts.pass++; addLog(v,'ng');}
+  counts.ng++; state='decided'; decided=v; startAlarm(v); renderCounts();
+}
 function teachRecord(mm){
   const m=S.models[teach.idx]; m.target=Math.round(mm*10)/10; if(!(m.tol>0)) m.tol=4; S.cur=teach.idx;
   tone(1500,.09,.35,'sine'); setTimeout(()=>tone(1900,.12,.35,'sine'),140);
-  endTeach(); syncModel(); state='decided'; decided=null;
+  endTeach(); syncModel();
   toast(m.name+' 초품 기준 등록: '+fmt(m.target)+' mm (± '+fmt(m.tol)+')  →  감시 시작');
-  setArmed(true); state='decided'; decided=target;
+  setArmed(true);
 }
 function renderTeach(){
   const m=S.models[teach.idx];
@@ -457,13 +487,6 @@ $('#e_teach').addEventListener('click',()=>{
   if(editIdx<0){alert('먼저 모델을 저장한 뒤 학습하세요.'); return;}
   startTeach(editIdx);
 });
-function decide(mm){
-  state='decided'; decided=mm; counts.pass++;
-  const ok=Math.abs(mm-target)<=tol;
-  if(ok){counts.ok++; addLog(mm,'ok'); if(S.okBeep) tone(1500,.09,.35,'sine');}
-  else{counts.ng++; addLog(mm,'ng'); startAlarm(mm);}
-  renderCounts();
-}
 
 /* ---------- 화면 그리기 ---------- */
 const reduceMotion=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -604,7 +627,7 @@ let lastKey='';
 function renderStatus(){
   let t='카메라 꺼짐', cls='', hint='카메라를 시작하세요.', warn=false;
   if(running){
-    if(teach&&mode==='run'){t='초품 등록'; cls='run'; hint=state==='measuring'?'초품 인식 중… 값이 안정되면 기준으로 저장합니다.':'초품이 지나가기를 기다리는 중입니다. 등록 중에는 판정·알람이 없습니다.';}
+    if(teach&&mode==='run'){t='초품 등록'; cls='run'; hint=state==='measuring'?'초품 인식 중… 유리가 다 지나가면 안정된 값들의 중앙값을 기준으로 저장합니다.':'초품이 지나가기를 기다리는 중입니다. 등록 중에는 판정·알람이 없습니다.';}
     else if(!lineOk()){t='설정 필요'; hint='설정에서 화면 세로 범위(mm)를 입력하세요.'; warn=true;}
     else if(!bg){t='배경 필요'; hint='유리가 없는 상태에서 "배경 저장"을 누르세요.'; warn=true;}
     else if(!tgtOk()){t='기준 필요'; hint='모델을 고르고 "초품 기준 등록"을 누른 뒤 초품을 통과시키세요.'; warn=true;}
@@ -623,7 +646,7 @@ function renderStatus(){
     const ok=Math.abs(decided-target)<=tol, d=decided-target;
     v.innerHTML=(ok?'GOOD':'NG')+'<small>'+(d>0?'+':'')+fmt(d)+' mm</small>'; v.className='verdict '+(ok?'ok':'ng'); ro.className='readout '+(ok?'ok':'ng');
   }else if(teach){v.innerHTML='초품 등록'; v.className='verdict run'; ro.className='readout';}
-  else if(state==='measuring'&&armed){v.innerHTML='측정 중'; v.className='verdict run'; ro.className='readout';}
+  else if(state==='measuring'&&armed){const os=pass&&pass.outSince!=null?(performance.now()-pass.outSince)/1000:0; v.innerHTML=os>0?'범위 밖<small>'+os.toFixed(1)+' / '+S.ngDelay+'초</small>':'측정 중'; v.className='verdict run'; ro.className='readout';}
   else{v.innerHTML=armed?'감시 중':'정지'; v.className='verdict'+(armed?' run':''); ro.className='readout';}
   const nd=$('#needle');
   if(liveMm==null||!tgtOk()) nd.hidden=true;
@@ -635,7 +658,7 @@ function refreshStatic(){
     bz.style.left=((target-tol-lo)/(hi-lo)*100)+'%'; bz.style.width=(2*tol/(hi-lo)*100)+'%';
     $('#gmin').textContent=fmt(lo); $('#gmax').textContent=fmt(hi);
   }else{$('#bandz').style.width='0'; $('#gmin').textContent=''; $('#gmax').textContent='';}
-  $('#o_sens').textContent=' '+S.sens; $('#o_stable').textContent=' '+S.stable; $('#o_band').textContent=' '+S.band; $('#o_gap').textContent=' '+S.gap; $('#o_xpos').textContent=' '+Math.round(S.xpos*100)+'%';
+  $('#o_sens').textContent=' '+S.sens; $('#o_stable').textContent=' '+S.stable; $('#o_band').textContent=' '+S.band; $('#o_gap').textContent=' '+S.gap; $('#o_ngDelay').textContent=' '+S.ngDelay+'초'; $('#o_xpos').textContent=' '+Math.round(S.xpos*100)+'%';
 }
 function renderCounts(){$('#cPass').textContent=counts.pass; $('#cOk').textContent=counts.ok; $('#cNg').textContent=counts.ng;}
 function addLog(mm,k){
