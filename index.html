@@ -48,7 +48,6 @@ button{cursor:pointer}
 .rbar button{flex:1;min-height:40px;border-radius:8px;border:1px solid #4a5a62;background:#1c272c;color:#eef;font-weight:600}
 .rbar button.primary{background:#1f8a4c;border-color:#1f8a4c}
 .panel{flex:0 0 auto;display:flex;flex-direction:column;gap:6px}
-.rulering .readout,.rulering .strip,.rulering .actions{display:none}
 .teaching .strip,.teaching .actions{display:none}
 .hint{margin:0;padding:6px 10px;border-left:4px solid var(--accent);background:var(--panel);border-radius:0 8px 8px 0;font-size:13px}
 .hint.warn{border-color:var(--band)}
@@ -147,23 +146,15 @@ button{cursor:pointer}
     <div class="cam">
       <canvas id="view" width="960" height="540" aria-label="카메라 화면"></canvas>
       <div id="empty" class="empty">
-        <div>흰 배경판이 잘 보이도록 폰·패드를 고정한 뒤 시작하세요.</div>
+        <div>유리가 화면 가운데쯤을 지나가도록 폰·패드를 고정한 뒤 시작하세요.<br>유리가 없는 상태에서 시작하면 배경이 자동 저장됩니다.</div>
         <button id="startBtn" class="btn primary" style="padding:12px 22px">카메라 시작</button>
         <div id="camErr" style="font-size:13px;max-width:420px"></div>
       </div>
     </div>
     <div class="panel">
-      <div id="rbar" class="rbar" hidden>
-        <div>카메라 화면에서 <b>초록 시작점</b>과 <b>노랑 끝점</b>을 끌어 옮기세요.</div>
-        <div class="row">
-          <label>시작값 (mm)<input id="r_start" type="number" step="1" inputmode="decimal"></label>
-          <label>범위 (mm)<input id="r_range" type="number" step="10" min="10" inputmode="decimal"></label>
-        </div>
-        <div class="row"><button id="r_center">가운데 세로 배치</button><button id="r_cancel">취소</button><button id="r_ok" class="primary">완료</button></div>
-      </div>
       <div id="tbar" class="rbar" hidden>
         <div id="tMsg"></div>
-        <div class="row"><button id="t_cancel">취소</button><button id="t_ok" class="primary">학습 완료</button></div>
+        <div class="row"><button id="t_cancel">취소</button></div>
       </div>
       <p id="hint" class="hint">카메라를 시작하세요.</p>
       <div id="readout" class="readout">
@@ -185,8 +176,8 @@ button{cursor:pointer}
       </div>
       <div class="actions">
         <button id="playBtn" class="btn play">▶ 시작</button>
-        <button id="rulerBtn" class="btn" disabled>눈금자<br>설정</button>
-        <button id="bgBtn" class="btn" disabled>흰 배경<br>저장</button>
+        <button id="teachBtn" class="btn" disabled style="border-color:var(--ok);color:var(--ok)">초품<br>기준 등록</button>
+        <button id="bgBtn" class="btn" disabled>배경<br>저장</button>
         <button id="testBtn" class="btn">알람<br>테스트</button>
       </div>
     </div>
@@ -196,17 +187,24 @@ button{cursor:pointer}
 <div id="sheet" class="sheet" hidden>
   <div class="box" role="dialog" aria-labelledby="sheetTitle">
     <h2 id="sheetTitle">설정 <button id="closeBtn" class="icon">닫기</button></h2>
+    <h3>가상 눈금자</h3>
+    <div class="form">
+      <label>화면 세로 범위 (mm)<input id="f_range" type="number" step="10" min="10" inputmode="decimal"></label>
+      <label>눈금자 가로 위치 <output id="o_xpos"></output><input id="f_xpos" type="range" min="0.1" max="0.9" step="0.01"></label>
+    </div>
+    <p class="note">화면 세로 전체가 실제 몇 mm인지 입력합니다. 줄자를 한 번 대보고 맞추면 됩니다. 판정은 초품 위치 기준이라 대략만 맞아도 괜찮습니다.</p>
     <h3>알람</h3>
     <div class="form">
       <label class="chk full"><input id="f_hold" type="checkbox"> NG 알람은 확인 버튼을 누를 때까지 계속 울림</label>
       <label class="chk full"><input id="f_okBeep" type="checkbox"> GOOD일 때 짧은 확인음</label>
+      <label class="chk full"><input id="f_zoom" type="checkbox"> 기준값 주변 근접 화면 표시</label>
     </div>
     <h3>인식 조정</h3>
     <div class="form">
       <label class="full">가림 감도 (낮을수록 민감) <output id="o_sens"></output><input id="f_sens" type="range" min="0.05" max="0.6" step="0.01"></label>
       <label class="full">판정에 필요한 안정 프레임 <output id="o_stable"></output><input id="f_stable" type="range" min="3" max="20" step="1"></label>
       <label class="full">인식 폭 (px) <output id="o_band"></output><input id="f_band" type="range" min="1" max="10" step="1"></label>
-      <label class="full">유리 채움 비율 (%) <output id="o_cover"></output><input id="f_cover" type="range" min="20" max="90" step="5"></label>
+      <label class="full">반사 틈 허용 (mm) <output id="o_gap"></output><input id="f_gap" type="range" min="3" max="40" step="1"></label>
       <div class="full"><canvas id="graph" width="600" height="80"></canvas></div>
     </div>
     <p class="note">그래프는 흰 배경 대비 변화량입니다(왼쪽이 시작점). 유리가 없을 때는 전체가 노란 선 아래, 유리가 지나갈 때 가려진 구간이 노란 선 위로 올라오도록 감도를 맞추세요. 조명이 바뀌면 "흰 배경 저장"을 다시 누르세요.</p>
@@ -227,7 +225,7 @@ button{cursor:pointer}
         <label>설정값 (mm)<input id="e_target" type="number" step="0.5" inputmode="decimal"></label>
         <label>허용 오차 ± (mm)<input id="e_tol" type="number" step="0.5" min="0" inputmode="decimal"></label>
       </div>
-      <button id="e_teach" class="btn" style="width:100%;margin-top:10px;border-color:var(--ok);color:var(--ok)">정상 유리로 학습 (설정값 자동 입력)</button>
+      <button id="e_teach" class="btn" style="width:100%;margin-top:10px;border-color:var(--ok);color:var(--ok)">초품으로 기준 등록 (설정값 자동 입력)</button>
       <div class="row"><button id="e_save" class="btn primary">저장</button><button id="e_del" class="btn">삭제</button><button id="e_cancel" class="btn">취소</button></div>
     </div>
     <p class="note">모델을 누르면 선택되고, "편집"에서 설정값과 허용 오차를 바꿀 수 있습니다. 설정값은 눈금자 범위 안에 있어야 합니다.</p>
@@ -250,7 +248,7 @@ const video=document.createElement('video'); video.muted=true; video.playsInline
 /* ---------- 저장 설정 ---------- */
 const KEY='glassgauge.v2';
 const DEF_MODELS=[{name:'M3',target:null,tol:4},{name:'25M3',target:null,tol:4},{name:'M6',target:null,tol:4},{name:'26M6',target:null,tol:4},{name:'VF best',target:null,tol:4},{name:'VF better X',target:null,tol:4}];
-const DEF={ax:.5,ay:.92,bx:.5,by:.08,lineSet:false,start:0,range:300,sens:.2,stable:6,band:4,cover:45,hold:true,okBeep:true,cur:0,models:DEF_MODELS};
+const DEF={zoom:true,xpos:.5,start:0,range:300,sens:.2,stable:6,band:4,gap:15,hold:true,okBeep:true,cur:0,models:DEF_MODELS};
 let S=JSON.parse(JSON.stringify(DEF));
 try{
   const j=localStorage.getItem(KEY);
@@ -272,11 +270,11 @@ function fmt(n){return (Math.round(n*10)/10).toFixed(1);}
 function esc(x){return String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
 /* ---------- 설정 입력 연결 ---------- */
-['sens','stable','band','cover'].forEach(k=>{
+['sens','stable','band','gap','range','xpos'].forEach(k=>{
   const el=$('#f_'+k); el.value=S[k];
-  el.addEventListener('input',()=>{const v=parseFloat(el.value); if(isNaN(v)) return; S[k]=(k==='stable'||k==='band')?Math.round(v):v; if(k==='band') bg=null; save(); refreshStatic();});
+  el.addEventListener('input',()=>{const v=parseFloat(el.value); if(isNaN(v)) return; S[k]=(k==='stable'||k==='band')?Math.round(v):v; if(k==='band') bg=null; if(k==='range'&&!(v>0)) return; if(k==='xpos'){bg=null; pendingBg=true;} save(); refreshStatic();});
 });
-['hold','okBeep'].forEach(k=>{const el=$('#f_'+k); el.checked=!!S[k]; el.addEventListener('change',()=>{S[k]=el.checked; save();});});
+['hold','okBeep','zoom'].forEach(k=>{const el=$('#f_'+k); el.checked=!!S[k]; el.addEventListener('change',()=>{S[k]=el.checked; save();});});
 
 /* ---------- 소리·알람 ---------- */
 let actx=null;
@@ -315,55 +313,19 @@ $('#startBtn').addEventListener('click',async()=>{
     video.srcObject=stream; await video.play();
     const vw=video.videoWidth||1280, vh=video.videoHeight||720, sc=Math.min(1,960/Math.max(vw,vh));
     view.width=W=Math.round(vw*sc); view.height=H=Math.round(vh*sc);
-    $('#empty').hidden=true; $('#rulerBtn').disabled=false; $('#bgBtn').disabled=!S.lineSet;
-    running=true; keepAwake(); requestAnimationFrame(loop);
-    if(!S.lineSet) openRuler();
+    $('#empty').hidden=true; $('#teachBtn').disabled=false; $('#bgBtn').disabled=false;
+    running=true; keepAwake(); bgDelay=20; requestAnimationFrame(loop);
   }catch(e){$('#camErr').textContent='카메라 권한이 거부되었거나 사용할 수 없습니다. 브라우저 설정에서 카메라를 허용한 뒤 다시 시도하세요. ('+(e.name||e)+')';}
 });
 
-/* ---------- 가상 눈금자 설정 (시작점·끝점 끌어 옮기기) ---------- */
-let saved=null, drag=null;
-function openRuler(){
-  if(teach) endTeach(); setArmed(false); saved={ax:S.ax,ay:S.ay,bx:S.bx,by:S.by,start:S.start,range:S.range};
-  $('#r_start').value=S.start; $('#r_range').value=S.range;
-  mode='ruler'; $('#rbar').hidden=false; document.body.classList.add('rulering');
-}
-$('#rulerBtn').addEventListener('click',openRuler);
-$('#r_start').addEventListener('input',()=>{const v=parseFloat($('#r_start').value); if(!isNaN(v)){S.start=v; refreshStatic();}});
-$('#r_range').addEventListener('input',()=>{const v=parseFloat($('#r_range').value); if(!isNaN(v)&&v>0){S.range=v; refreshStatic();}});
-$('#r_center').addEventListener('click',()=>{S.ax=.5;S.ay=.92;S.bx=.5;S.by=.08;});
-$('#r_cancel').addEventListener('click',()=>{Object.assign(S,saved); mode='run'; $('#rbar').hidden=true; document.body.classList.remove('rulering'); refreshStatic();});
-$('#r_ok').addEventListener('click',()=>{
-  if(!(S.range>0)){$('#r_range').focus(); return;}
-  S.lineSet=true; save(); mode='run'; $('#rbar').hidden=true; document.body.classList.remove('rulering'); $('#bgBtn').disabled=false;
-  bg=null; pendingBg=true; refreshStatic();
-});
-function toNorm(e){
-  const r=view.getBoundingClientRect(), sc=Math.min(r.width/W,r.height/H), cw=W*sc, ch=H*sc;
-  return {x:(e.clientX-r.left-(r.width-cw)/2)/cw, y:(e.clientY-r.top-(r.height-ch)/2)/ch, cw, ch};
-}
-view.addEventListener('pointerdown',e=>{
-  if(mode!=='ruler') return;
-  const p=toNorm(e); if(p.x<0||p.x>1||p.y<0||p.y>1) return;
-  const dA=Math.hypot((p.x-S.ax)*p.cw,(p.y-S.ay)*p.ch), dB=Math.hypot((p.x-S.bx)*p.cw,(p.y-S.by)*p.ch);
-  drag=dA<=dB?'a':'b';
-  if(drag==='a'){S.ax=p.x;S.ay=p.y;} else {S.bx=p.x;S.by=p.y;}
-  view.setPointerCapture(e.pointerId);
-});
-view.addEventListener('pointermove',e=>{
-  if(mode!=='ruler'||!drag) return;
-  const p=toNorm(e), x=Math.max(0,Math.min(1,p.x)), y=Math.max(0,Math.min(1,p.y));
-  if(drag==='a'){S.ax=x;S.ay=y;} else {S.bx=x;S.by=y;}
-});
-view.addEventListener('pointerup',()=>{drag=null;});
-view.addEventListener('pointercancel',()=>{drag=null;});
+let bgDelay=0;
 
-$('#bgBtn').addEventListener('click',()=>{bg=null; pendingBg=true;});
+$('#bgBtn').addEventListener('click',()=>{bg=null; pendingBg=true; toast('배경 저장됨. 유리가 없는 상태여야 합니다.');});
 $('#resetBtn').addEventListener('click',()=>{counts.pass=counts.ok=counts.ng=0; log.length=0; renderCounts(); renderLog(); $('#lastVal').textContent='—'; $('#lastK').textContent='';});
 
 /* ---------- 좌표 ---------- */
-function pts(){return {A:{x:S.ax*W,y:S.ay*H},B:{x:S.bx*W,y:S.by*H}};}
-function lineOk(){const {A,B}=pts(); return S.lineSet && Math.hypot(B.x-A.x,B.y-A.y)>=40 && S.range>0;}
+function pts(){return {A:{x:S.xpos*W,y:H*0.98},B:{x:S.xpos*W,y:H*0.02}};}
+function lineOk(){return S.range>0;}
 function idxToMm(i,N){return S.start+(i/(N-1))*S.range;}
 function mmToPt(mm){const {A,B}=pts(); const t=(mm-S.start)/S.range; return {x:A.x+(B.x-A.x)*t,y:A.y+(B.y-A.y)*t};}
 function mmPerPx(){const {A,B}=pts(); return S.range/Math.max(1,Math.hypot(B.x-A.x,B.y-A.y));}
@@ -386,21 +348,61 @@ function sample(){
   return out;
 }
 /* 흰 배경 대비 변화량: 어두워지거나 색이 달라지면 값이 커진다 (0 = 흰 배경 그대로) */
+function med(arr){ if(!arr.length) return 1; const b=Float32Array.from(arr).sort(); return b[b.length>>1]; }
+/* 배경 대비 변화량.
+   ① 카메라 자동 밝기·색 보정: 유리가 들어오면 카메라가 화면을 밝게/어둡게 바꾸므로,
+      설정값보다 위쪽(항상 뒷판이 보이는 곳)의 밝기 변화를 재서 저장된 배경을 같은 비율로 맞춘 뒤 비교한다.
+   ② 블러 대응: 대략의 경계를 찾은 뒤, 그 주변에서 '가려짐→안 가려짐'이 가장 급하게 바뀌는 지점(전환 중앙)을 경계로 삼는다. */
 function analyze(p){
-  const N=p.length/3, raw=new Float32Array(N), s=new Float32Array(N);
+  const N=p.length/3, raw=new Float32Array(N), s=new Float32Array(N), mpp=mmPerPx();
+  let r0=Math.round(N*0.85);
+  if(tgtOk()){ const i=Math.round((target+tol+12-S.start)/S.range*(N-1)); r0=Math.min(Math.max(i,Math.round(N*0.4)),N-8); }
+  const gs=[[],[],[]];
+  for(let i=r0;i<N;i++) for(let c=0;c<3;c++){const b=bg[i*3+c]; if(b>15) gs[c].push(p[i*3+c]/b);}
+  let gain=[0,1,2].map(c=>Math.max(0.5,Math.min(2,med(gs[c]))));
+  let res=0,rn=0;
+  for(let i=r0;i<N;i++){const j=i*3, ref=Math.max(40,(bg[j]+bg[j+1]+bg[j+2])/3); res+=(Math.abs(p[j]-bg[j]*gain[0])+Math.abs(p[j+1]-bg[j+1]*gain[1])+Math.abs(p[j+2]-bg[j+2]*gain[2]))/3/ref; rn++;}
+  res=rn?res/rn:0;
+  const topCovered=res>S.sens;            // 위쪽 기준 구간까지 유리가 덮음(키 큰 다른 유리)
+  if(topCovered) gain=[1,1,1];
   for(let i=0;i<N;i++){
-    const j=i*3, ref=Math.max(40,(bg[j]+bg[j+1]+bg[j+2])/3);
-    raw[i]=(Math.abs(p[j]-bg[j])+Math.abs(p[j+1]-bg[j+1])+Math.abs(p[j+2]-bg[j+2]))/3/ref;
+    const j=i*3, ref=Math.max(40,(bg[j]*gain[0]+bg[j+1]*gain[1]+bg[j+2]*gain[2])/3);
+    raw[i]=(Math.abs(p[j]-bg[j]*gain[0])+Math.abs(p[j+1]-bg[j+1]*gain[1])+Math.abs(p[j+2]-bg[j+2]*gain[2]))/3/ref;
   }
   for(let i=0;i<N;i++){let a=0,c=0; for(let k=-2;k<=2;k++){const q=i+k; if(q>=0&&q<N){a+=raw[q];c++;}} s[i]=a/c;}
-  // 유리는 시작점(아래)부터 덮으므로, 시작점부터 '가려짐'이 충분히 이어진 구간의 끝 = 유리 끝단
-  let edge=-1, run=0, cnt=0, head=0; const headN=Math.max(5,Math.round(N*.08));
+  // 아래(시작점)부터 이어진 '가려짐' 덩어리의 끝 = 유리 끝단. 반사로 생긴 작은 틈(허용 틈 이하)은 이어진 것으로 본다.
+  let last=-1, head=0, cnt=0; const headN=Math.max(5,Math.round(N*.08)), gapPx=Math.max(5,Math.round(S.gap/mpp));
   for(let i=0;i<N;i++){
-    if(s[i]>S.sens){cnt++; run++; if(i<headN) head++;} else run=0;
-    if(run>=3 && cnt/(i+1)>=S.cover/100) edge=i;
+    if(s[i]>S.sens){ if(i-last>gapPx&&last>=0&&cnt>0) break; last=i; cnt++; if(i<headN) head++; }
+    else if(last>=0 && i-last>gapPx) break;
+    else if(last<0 && i>headN) break;
   }
+  let edge=cnt>=3?last:-1;
   const present=edge>=Math.max(4,N*.03) && head>=headN*.4;
-  return {s,N,edge,present};
+  if(present&&!topCovered){
+    const k=Math.max(3,Math.round(2/mpp)), r=Math.max(4,Math.round(8/mpp));
+    let best=edge, bv=-1e9;
+    for(let j=Math.max(k,edge-r); j<=Math.min(N-1-k,edge+r); j++){
+      let lo=0,hi=0; for(let q=1;q<=k;q++){lo+=s[j-q]; hi+=s[j+q];}
+      const st=(lo-hi)/k; if(st>bv){bv=st; best=j;}
+    }
+    if(bv>S.sens*0.5) edge=best;
+  }
+  if(present&&topCovered) edge=N-1;
+  return {s,N,edge,present,gain,topCovered};
+}
+
+/* 카메라 자동 노출·화이트밸런스·초점을 지금 상태로 고정 (지원하는 기기만: 주로 안드로이드 크롬) */
+let camLock='확인 전';
+async function lockCamera(){
+  try{
+    const tr=video.srcObject&&video.srcObject.getVideoTracks()[0]; if(!tr||!tr.getCapabilities){camLock='미지원'; return;}
+    const cap=tr.getCapabilities(), st=tr.getSettings?tr.getSettings():{}, adv={}, done=[];
+    if(cap.exposureMode&&cap.exposureMode.includes('manual')){adv.exposureMode='manual'; if(st.exposureTime) adv.exposureTime=st.exposureTime; done.push('노출');}
+    if(cap.whiteBalanceMode&&cap.whiteBalanceMode.includes('manual')){adv.whiteBalanceMode='manual'; if(st.colorTemperature) adv.colorTemperature=st.colorTemperature; done.push('색');}
+    if(cap.focusMode&&cap.focusMode.includes('manual')){adv.focusMode='manual'; if(st.focusDistance) adv.focusDistance=st.focusDistance; done.push('초점');}
+    if(done.length){await tr.applyConstraints({advanced:[adv]}); camLock=done.join('·')+' 고정';} else camLock='미지원(소프트웨어 보정)';
+  }catch(e){camLock='미지원(소프트웨어 보정)';}
 }
 
 /* ---------- 판정 ---------- */
@@ -430,28 +432,27 @@ function process(a,p){
   }
 }
 function teachRecord(mm){
-  state='decided'; decided=null; teach.vals.push(mm); tone(1500,.09,.35,'sine'); renderTeach();
+  const m=S.models[teach.idx]; m.target=Math.round(mm*10)/10; if(!(m.tol>0)) m.tol=4; S.cur=teach.idx;
+  tone(1500,.09,.35,'sine'); setTimeout(()=>tone(1900,.12,.35,'sine'),140);
+  endTeach(); syncModel(); state='decided'; decided=null;
+  toast(m.name+' 초품 기준 등록: '+fmt(m.target)+' mm (± '+fmt(m.tol)+')  →  감시 시작');
+  setArmed(true); state='decided'; decided=target;
 }
-function teachAvg(){return teach.vals.reduce((a,b)=>a+b,0)/teach.vals.length;}
 function renderTeach(){
-  const m=S.models[teach.idx], n=teach.vals.length;
-  $('#tMsg').innerHTML='<b>'+esc(m.name)+'</b> 학습 중 · 정상 유리를 통과시키세요. 2~3장 통과시키면 더 정확합니다.<br>'+
-    (n?'통과 <b>'+n+'장</b> · 평균 <b>'+fmt(teachAvg())+' mm</b> (최소 '+fmt(Math.min(...teach.vals))+' / 최대 '+fmt(Math.max(...teach.vals))+')':'아직 통과한 유리가 없습니다.');
+  const m=S.models[teach.idx];
+  $('#tMsg').innerHTML='<b>'+esc(m.name)+'</b> 초품 기준 등록 중 · <b>초품을 한 장 통과</b>시키세요. 지나가는 위치가 기준값으로 저장되고 바로 감시가 시작됩니다.';
 }
 function startTeach(idx){
-  if(!running||!lineOk()||!bg){alert('먼저 카메라 시작 → 눈금자 설정 → 흰 배경 저장을 해주세요.'); return;}
-  setArmed(false); teach={idx,vals:[]}; state='ready'; buf=[];
+  if(!running||!bg){alert('카메라를 시작하고, 유리가 없는 상태에서 "배경 저장"을 먼저 해주세요.'); return;}
+  setArmed(false); teach={idx}; state='ready'; buf=[];
   $('#msheet').hidden=true; $('#tbar').hidden=false; document.body.classList.add('teaching'); renderTeach();
 }
-function endTeach(){teach=null; $('#tbar').hidden=true; document.body.classList.remove('teaching'); state='ready'; buf=[];}
-$('#t_cancel').addEventListener('click',endTeach);
-$('#t_ok').addEventListener('click',()=>{
-  if(!teach.vals.length){alert('아직 통과한 유리가 없습니다. 정상 유리를 한 장 이상 통과시켜 주세요.'); return;}
-  const m=S.models[teach.idx], avg=Math.round(teachAvg()*10)/10, spread=Math.max(...teach.vals)-Math.min(...teach.vals);
-  m.target=avg; if(!(m.tol>=4)) m.tol=4; S.cur=teach.idx;
-  const msg=m.name+' 학습 완료: 설정값 '+fmt(avg)+' mm, 허용 ± '+fmt(m.tol)+' mm'+(spread>m.tol?'\n\n주의: 통과한 유리끼리 차이가 '+fmt(spread)+' mm로 큽니다. 카메라 고정 상태나 조명을 확인한 뒤 다시 학습하세요.':'');
-  endTeach(); syncModel(); alert(msg);
-});
+function endTeach(){teach=null; $('#tbar').hidden=true; document.body.classList.remove('teaching'); buf=[];}
+$('#t_cancel').addEventListener('click',()=>{endTeach(); state='ready';});
+$('#teachBtn').addEventListener('click',()=>startTeach(S.cur));
+let toastT=null;
+function toast(msg){const h=$('#hint'); h.textContent=msg; h.className='hint'; lastKey='__toast'; clearTimeout(toastT); toastLock=true; toastT=setTimeout(()=>{toastLock=false;},4000);}
+let toastLock=false;
 $('#e_teach').addEventListener('click',()=>{
   if(editIdx<0){alert('먼저 모델을 저장한 뒤 학습하세요.'); return;}
   startTeach(editIdx);
@@ -552,31 +553,43 @@ function drawHud(a){
   const hs=Math.max(12,Math.round(Math.min(W,H)/30));
   let l2='흰 배경 저장 필요';
   if(bg&&a){ l2=a.present?'가려짐  '+fmt(S.start)+' ~ '+fmt(idxToMm(a.edge,a.N))+' mm':'흰 배경 정상 · 가려진 곳 없음'; }
-  const l1='● 실시간 인식  '+Math.round(fps)+' fps';
+  const l1='● 실시간 인식  '+Math.round(fps)+' fps · '+camLock;
   ctx.font='700 '+hs+'px system-ui,sans-serif';
   const bw=Math.max(ctx.measureText(l1).width,ctx.measureText(l2).width)+hs*1.2;
   ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(8,8,bw,hs*3);
   ctx.fillStyle=(Math.floor(performance.now()/500)%2)?'#5cc8ff':'#2a7fb5'; ctx.fillText(l1,8+hs*.6,8+hs*1.3);
   ctx.fillStyle=a&&a.present?'#ff8a80':'#e8eef0'; ctx.fillText(l2,8+hs*.6,8+hs*2.45);
 }
-function drawHandles(){
-  const {A,B}=pts(), r=Math.max(14,W/40);
-  ctx.fillStyle='rgba(0,0,0,.25)'; ctx.fillRect(0,0,W,H);
-  [[A,'#34e07f','시작 '+fmt(S.start)],[B,'#ffd60a','끝 '+fmt(endVal())]].forEach(([p,c,t])=>{
-    ctx.fillStyle=c; ctx.globalAlpha=.35; ctx.beginPath(); ctx.arc(p.x,p.y,r*1.8,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
-    ctx.beginPath(); ctx.arc(p.x,p.y,r*.6,0,Math.PI*2); ctx.fill();
-    ctx.font='700 '+Math.round(W/30)+'px system-ui,sans-serif'; ctx.lineWidth=4; ctx.strokeStyle='rgba(0,0,0,.75)';
-    ctx.strokeText(t,p.x+r*2,p.y+6); ctx.fillStyle='#fff'; ctx.fillText(t,p.x+r*2,p.y+6);
-  });
+function drawZoom(a){
+  if(!S.zoom||!tgtOk()||!inRange()||!video.videoWidth) return;
+  const mpp=mmPerPx(), span=Math.max(15,tol*2.5), c=mmToPt(target), h=2*span/mpp, w=h*0.7;
+  const sx=video.videoWidth/W, sy=video.videoHeight/H;
+  const lab2=Math.max(13,Math.round(Math.min(W,H)/24))*1.5, room=c.y<H/2?(H-8)-(c.y+lab2):(c.y-lab2)-Math.round(H*0.11);
+  let dw=Math.min(W*0.42,H*0.42*0.7); if(dw/0.7>room) dw=Math.max(60,room*0.7);
+  const dh=dw/0.7, dx=W-dw-8, dy=c.y<H/2?H-dh-8:Math.round(H*0.11), zf=dh/h;
+  ctx.save(); ctx.fillStyle='#000'; ctx.fillRect(dx-2,dy-2,dw+4,dh+4);
+  ctx.drawImage(video,(c.x-w/2)*sx,(c.y-h/2)*sy,w*sx,h*sy,dx,dy,dw,dh);
+  const Y=v=>dy+dh/2-(v-target)/mpp*zf;   // 눈금자는 위로 갈수록 값이 커짐
+  ctx.fillStyle='rgba(255,214,10,.18)'; ctx.fillRect(dx,Y(target+tol),dw,Y(target-tol)-Y(target+tol));
+  ctx.strokeStyle=TGT; ctx.setLineDash([6,4]); ctx.lineWidth=2;
+  [target-tol,target+tol].forEach(v=>{ctx.beginPath(); ctx.moveTo(dx,Y(v)); ctx.lineTo(dx+dw,Y(v)); ctx.stroke();});
+  ctx.setLineDash([]); ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(dx,Y(target)); ctx.lineTo(dx+dw,Y(target)); ctx.stroke();
+  if(a&&a.present){
+    const mm=idxToMm(a.edge,a.N), y=Y(mm), ok=Math.abs(mm-target)<=tol;
+    if(y>=dy&&y<=dy+dh){ctx.strokeStyle=ok?'#34e07f':RED; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(dx,y); ctx.lineTo(dx+dw,y); ctx.stroke();}
+    else{ctx.fillStyle=RED; ctx.font='800 '+Math.round(dw/7)+'px system-ui,sans-serif'; ctx.textAlign='center'; ctx.fillText(y<dy?'▲ 범위 위':'▼ 범위 아래',dx+dw/2,y<dy?dy+dw/6:dy+dh-dw/12); ctx.textAlign='left';}
+  }
+  ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.strokeRect(dx,dy,dw,dh);
+  ctx.fillStyle='rgba(0,0,0,.65)'; const fs=Math.round(dw/11); ctx.font='700 '+fs+'px system-ui,sans-serif';
+  const lab='근접 ±'+Math.round(span)+'mm'; ctx.fillRect(dx,dy,ctx.measureText(lab).width+12,fs*1.4); ctx.fillStyle='#fff'; ctx.fillText(lab,dx+6,dy+fs*1.05);
+  ctx.restore();
 }
 function drawOverlay(a){
-  const ok=lineOk()||mode==='ruler';
-  if(mode==='ruler') drawHandles();
-  if(!ok) return;
-  if(Math.hypot((S.bx-S.ax)*W,(S.by-S.ay)*H)<40||!(S.range>0)) return;
-  drawRuler(mode==='ruler'?null:a);
+  if(!lineOk()) return;
+  drawRuler(a);
   if(tgtOk()&&inRange()) drawTarget();
   if(mode==='run'&&a&&a.present) drawEdge(a);
+  if(mode==='run') drawZoom(a);
   if(mode==='run') drawHud(a);
 }
 function drawGraph(a){
@@ -591,25 +604,25 @@ let lastKey='';
 function renderStatus(){
   let t='카메라 꺼짐', cls='', hint='카메라를 시작하세요.', warn=false;
   if(running){
-    if(teach&&mode==='run'){t='학습 중'; cls='run'; hint=state==='measuring'?'유리 인식 중… 값이 안정되면 기록합니다.':'정상 유리가 지나가기를 기다리는 중입니다. 학습 중에는 판정·알람이 없습니다.';}
-    else if(mode==='ruler'){t='눈금자 설정'; hint='시작점(초록)은 유리 아래쪽(롤러쪽), 끝점(노랑)은 위쪽에 두세요. 흰 배경판에 범위만큼 떨어진 표시를 해두고 두 점을 맞추면 정확합니다.'; warn=true;}
-    else if(!lineOk()){t='설정 필요'; hint='"눈금자 설정"을 눌러 가상 눈금자를 만드세요.'; warn=true;}
-    else if(!bg){t='배경 필요'; hint='유리가 없는 상태에서 "흰 배경 저장"을 누르세요.'; warn=true;}
-    else if(!tgtOk()){t='설정값 필요'; hint='모델을 눌러 "편집"에서 설정값(mm)을 입력하세요.'; warn=true;}
-    else if(!inRange()){t='범위 밖'; hint='설정값 '+fmt(target)+'mm가 눈금자 범위('+fmt(S.start)+'~'+fmt(endVal())+'mm) 밖에 있습니다. 눈금자 설정에서 시작값을 바꾸세요.'; warn=true;}
-    else if(!armed){t='정지'; hint='모델과 노란 설정 라인을 확인하고 "▶ 시작"을 누르세요.'; warn=true;}
+    if(teach&&mode==='run'){t='초품 등록'; cls='run'; hint=state==='measuring'?'초품 인식 중… 값이 안정되면 기준으로 저장합니다.':'초품이 지나가기를 기다리는 중입니다. 등록 중에는 판정·알람이 없습니다.';}
+    else if(!lineOk()){t='설정 필요'; hint='설정에서 화면 세로 범위(mm)를 입력하세요.'; warn=true;}
+    else if(!bg){t='배경 필요'; hint='유리가 없는 상태에서 "배경 저장"을 누르세요.'; warn=true;}
+    else if(!tgtOk()){t='기준 필요'; hint='모델을 고르고 "초품 기준 등록"을 누른 뒤 초품을 통과시키세요.'; warn=true;}
+    else if(!inRange()){t='범위 밖'; hint='기준값 '+fmt(target)+'mm가 화면 범위(0~'+fmt(endVal())+'mm) 밖입니다. "초품 기준 등록"을 다시 하세요.'; warn=true;}
+    else if(!armed){t='정지'; hint='모델과 노란 기준 라인을 확인하고 "▶ 시작"을 누르세요. 작업 시작 시에는 "초품 기준 등록"을 권장합니다.'; warn=true;}
     else if(state==='measuring'){t='측정 중'; cls='run'; hint='유리 인식 중… 값이 안정되면 판정합니다.';}
     else if(state==='decided'){const ok=Math.abs(decided-target)<=tol; t=ok?'GOOD':'NG'; cls=ok?'ok':'ng'; hint=ok?'GOOD: 설정 범위 안에서 가려졌습니다. 다음 유리를 기다립니다.':'NG: 설정값과 다른 지점이 가려졌습니다. 다른 유리 혼입을 확인하세요.';}
     else {t='감시 중'; cls='run'; hint=curModel().name+' 감시 중. 흰 배경이 가려지기를 기다리는 중입니다. (1px ≈ '+fmt(mmPerPx())+' mm)';}
   }
   const key=t+cls+hint;
-  if(key!==lastKey){lastKey=key; const st=$('#state'); st.textContent=t; st.className='state '+cls; const h=$('#hint'); h.textContent=hint; h.className='hint'+(warn?' warn':'');}
+  {const st=$('#state'); if(st.textContent!==t) st.textContent=t; if(st.className!=='state '+cls) st.className='state '+cls;}
+  if(!toastLock&&key!==lastKey){lastKey=key; const h=$('#hint'); h.textContent=hint; h.className='hint'+(warn?' warn':'');}
   $('#val').textContent=liveMm==null?'—':fmt(liveMm);
   const v=$('#verdict'), ro=$('#readout');
   if(state==='decided'&&tgtOk()){
     const ok=Math.abs(decided-target)<=tol, d=decided-target;
     v.innerHTML=(ok?'GOOD':'NG')+'<small>'+(d>0?'+':'')+fmt(d)+' mm</small>'; v.className='verdict '+(ok?'ok':'ng'); ro.className='readout '+(ok?'ok':'ng');
-  }else if(teach){v.innerHTML='학습 중'; v.className='verdict run'; ro.className='readout';}
+  }else if(teach){v.innerHTML='초품 등록'; v.className='verdict run'; ro.className='readout';}
   else if(state==='measuring'&&armed){v.innerHTML='측정 중'; v.className='verdict run'; ro.className='readout';}
   else{v.innerHTML=armed?'감시 중':'정지'; v.className='verdict'+(armed?' run':''); ro.className='readout';}
   const nd=$('#needle');
@@ -622,7 +635,7 @@ function refreshStatic(){
     bz.style.left=((target-tol-lo)/(hi-lo)*100)+'%'; bz.style.width=(2*tol/(hi-lo)*100)+'%';
     $('#gmin').textContent=fmt(lo); $('#gmax').textContent=fmt(hi);
   }else{$('#bandz').style.width='0'; $('#gmin').textContent=''; $('#gmax').textContent='';}
-  $('#o_sens').textContent=' '+S.sens; $('#o_stable').textContent=' '+S.stable; $('#o_band').textContent=' '+S.band; $('#o_cover').textContent=' '+S.cover;
+  $('#o_sens').textContent=' '+S.sens; $('#o_stable').textContent=' '+S.stable; $('#o_band').textContent=' '+S.band; $('#o_gap').textContent=' '+S.gap; $('#o_xpos').textContent=' '+Math.round(S.xpos*100)+'%';
 }
 function renderCounts(){$('#cPass').textContent=counts.pass; $('#cOk').textContent=counts.ok; $('#cNg').textContent=counts.ng;}
 function addLog(mm,k){
@@ -680,8 +693,8 @@ function setArmed(v){
 $('#playBtn').addEventListener('click',()=>{
   unlockAudio();
   if(!armed){
-    if(!tgtOk()){renderModels(); $('#msheet').hidden=false; openEdit(S.cur); return;}
-    if(!running||!lineOk()||!bg){alert('먼저 카메라 시작 → 눈금자 설정 → 흰 배경 저장을 해주세요.'); return;}
+    if(!tgtOk()){startTeach(S.cur); return;}
+    if(!running||!lineOk()||!bg){alert('카메라를 시작하고, 유리가 없는 상태에서 "배경 저장"을 해주세요.'); return;}
     if(!inRange()){alert('설정값이 눈금자 범위 밖입니다. 눈금자 설정에서 시작값이나 범위를 바꿔주세요.'); return;}
   }
   setArmed(!armed);
@@ -700,7 +713,8 @@ function loop(){
     const p=sample();
     if(p){
       if(bg&&bg.length!==p.length) bg=null;
-      if(pendingBg){bg=Float32Array.from(p); pendingBg=false; state='ready'; buf=[]; absent=99; liveMm=null;}
+      if(bgDelay>0){bgDelay--; if(bgDelay===0) pendingBg=true;}
+      if(pendingBg){bg=Float32Array.from(p); pendingBg=false; state='ready'; buf=[]; absent=99; liveMm=null; if(camLock==='확인 전') lockCamera();}
       lastProfile=p;
       if(bg){a=analyze(p); process(a,p);}
     }
