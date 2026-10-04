@@ -250,6 +250,7 @@ button{cursor:pointer}
     <div class="form">
       <label class="chk full"><input id="f_hold" type="checkbox"> NG 알람은 확인 버튼을 누를 때까지 계속</label>
       <label class="chk full"><input id="f_okBeep" type="checkbox"> GOOD일 때 짧은 확인음</label>
+      <label class="chk full"><input id="f_expLock" type="checkbox"> 카메라 노출·색 고정 (실험 · 다음 카메라 시작부터 적용)</label>
     </div>
 
     <h3>인식 조정</h3>
@@ -322,7 +323,7 @@ const DEF_MODELS=[{name:'M3',h:null},{name:'25M3',h:null},{name:'M6',h:441.8},{n
 function newCode(){const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<8;i++){s+=a[Math.floor(Math.random()*a.length)]; if(i===3) s+='-';} return s;}
 const DEF={xpos:.5,range:300,lines:5,sens:.2,band:4,gap:15,stable:6,settle:0.8,ngDelay:2,tolWide:10,capture:2.5,zoom:true,hold:true,okBeep:false,
   cur:2,models:DEF_MODELS,offset:null,offset0:null,calDate:null,calModel:null,
-  rxOn:true,pair:null,broker:'wss://broker.emqx.io:8084/mqtt',rxPair:''};
+  expLock:false,rxOn:true,pair:null,broker:'wss://broker.emqx.io:8084/mqtt',rxPair:''};
 let S=JSON.parse(JSON.stringify(DEF));
 try{
   const j=localStorage.getItem(KEY);
@@ -405,7 +406,7 @@ function guessModel(real){
     save(); refreshStatic();
   });
 });
-['hold','okBeep','rxOn'].forEach(k=>{const el=$('#f_'+k); el.checked=!!S[k]; el.addEventListener('change',()=>{S[k]=el.checked; save(); if(k==='rxOn') mqRestart();});});
+['hold','okBeep','rxOn','expLock'].forEach(k=>{const el=$('#f_'+k); el.checked=!!S[k]; el.addEventListener('change',()=>{S[k]=el.checked; save(); if(k==='rxOn') mqRestart();});});
 $('#f_broker').value=S.broker;
 $('#f_broker').addEventListener('change',()=>{const v=$('#f_broker').value.trim(); if(v){S.broker=v; save(); mqRestart();}});
 $('#newPair').addEventListener('click',()=>{ if(!confirm('새 연결 코드를 만들면 수신 폰에도 새 코드를 다시 입력해야 합니다. 계속할까요?')) return; S.pair=newCode(); save(); refreshStatic(); mqRestart(); });
@@ -453,19 +454,41 @@ $('#startBtn').addEventListener('click',async()=>{
     const vw=video.videoWidth||1280, vh=video.videoHeight||720, sc=Math.min(1,960/Math.max(vw,vh));
     view.width=W=Math.round(vw*sc); view.height=H=Math.round(vh*sc);
     $('#empty').hidden=true; $('#teachBtn').disabled=false; $('#bgBtn').disabled=false;
-    running=true; keepAwake(); bgDelay=20; requestAnimationFrame(loop);
+    running=true; keepAwake(); bgDelay=60; camLock='확인 중'; requestAnimationFrame(loop); setTimeout(lockCamera,3000);
     mqStart('tx');
   }catch(e){$('#camErr').textContent='카메라 권한이 거부되었거나 사용할 수 없습니다. 브라우저 설정에서 카메라를 허용한 뒤 다시 시도하세요. ('+(e.name||e)+')';}
 });
 let camLock='확인 전';
+function frameMean(){
+  try{ const w=Math.min(96,W), h=Math.min(96,H), d=ctx.getImageData(Math.round((W-w)/2),Math.round((H-h)/2),w,h).data; let t=0; for(let i=0;i<d.length;i+=4) t+=d[i]+d[i+1]+d[i+2]; return t/(d.length/4)/3; }catch(e){ return 0; }
+}
+/* 카메라가 밝기를 맞출 시간을 준 뒤(3초) 고정.
+   초점은 지원하면 고정. 노출·색은 설정에서 켰을 때만, 그리고 현재 값을 알 수 있을 때만 고정.
+   고정 후 화면이 갑자기 어두워지면(절반 이하) 자동으로 원래대로 되돌림. */
 async function lockCamera(){
+  const tr=video.srcObject&&video.srcObject.getVideoTracks()[0];
+  if(!tr||!tr.getCapabilities){camLock='노출 자동(보정)'; return;}
   try{
-    const tr=video.srcObject&&video.srcObject.getVideoTracks()[0]; if(!tr||!tr.getCapabilities){camLock='노출 자동(보정)'; return;}
     const cap=tr.getCapabilities(), st=tr.getSettings?tr.getSettings():{}, adv={}, done=[];
-    if(cap.exposureMode&&cap.exposureMode.includes('manual')){adv.exposureMode='manual'; if(st.exposureTime) adv.exposureTime=st.exposureTime; done.push('노출');}
-    if(cap.whiteBalanceMode&&cap.whiteBalanceMode.includes('manual')){adv.whiteBalanceMode='manual'; if(st.colorTemperature) adv.colorTemperature=st.colorTemperature; done.push('색');}
-    if(cap.focusMode&&cap.focusMode.includes('manual')){adv.focusMode='manual'; if(st.focusDistance) adv.focusDistance=st.focusDistance; done.push('초점');}
-    if(done.length){await tr.applyConstraints({advanced:[adv]}); camLock=done.join('·')+' 고정';} else camLock='노출 자동(보정)';
+    if(cap.focusMode&&cap.focusMode.includes('manual')&&st.focusDistance){adv.focusMode='manual'; adv.focusDistance=st.focusDistance; done.push('초점');}
+    if(S.expLock){
+      if(cap.exposureMode&&cap.exposureMode.includes('manual')&&st.exposureTime){adv.exposureMode='manual'; adv.exposureTime=st.exposureTime; done.push('노출');}
+      if(cap.whiteBalanceMode&&cap.whiteBalanceMode.includes('manual')&&st.colorTemperature){adv.whiteBalanceMode='manual'; adv.colorTemperature=st.colorTemperature; done.push('색');}
+    }
+    if(!done.length){camLock='노출 자동(보정)'; return;}
+    const before=frameMean();
+    await tr.applyConstraints({advanced:[adv]});
+    camLock=done.join('·')+' 고정';
+    setTimeout(async()=>{
+      const after=frameMean();
+      if(before>20&&after<before*0.5){
+        try{ const back={}; if(adv.exposureMode) back.exposureMode='continuous'; if(adv.whiteBalanceMode) back.whiteBalanceMode='continuous'; if(adv.focusMode) back.focusMode='continuous';
+          await tr.applyConstraints({advanced:[back]}); }catch(e){}
+        camLock='노출 자동(복구됨)'; S.expLock=false; $('#f_expLock').checked=false; save();
+        toast('노출 고정 후 화면이 어두워져 자동으로 되돌렸습니다. 배경을 다시 저장합니다.');
+      }
+      bgs=null; pendingBg=true;      // 고정·복구 뒤 배경 다시 저장
+    },1200);
   }catch(e){camLock='노출 자동(보정)';}
 }
 $('#bgBtn').addEventListener('click',()=>{bgs=null; pendingBg=true; toast('배경 저장됨. 유리가 없는 상태여야 합니다.');});
@@ -1006,7 +1029,7 @@ function loop(){
   if(ps){
     if(bgs&&(bgs.length!==ps.length||bgs[0].length!==ps[0].length)) bgs=null;
     if(bgDelay>0){bgDelay--; if(bgDelay===0) pendingBg=true;}
-    if(pendingBg){bgs=ps.map(p=>Float32Array.from(p)); pendingBg=false; state='ready'; pass=null; absent=99; liveCam=null; if(camLock==='확인 전') lockCamera();}
+    if(pendingBg){bgs=ps.map(p=>Float32Array.from(p)); pendingBg=false; state='ready'; pass=null; absent=99; liveCam=null;}
     lastPs=ps;
     if(bgs){a=analyzeAll(ps); process(a);}
   }
