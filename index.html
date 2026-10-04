@@ -227,13 +227,14 @@ button{cursor:pointer}
 
     <h3>판정</h3>
     <div class="form">
-      <label>가까운 모델이 없는 쪽 허용 (mm)<input id="f_tolWide" type="number" step="0.5" min="0.5" inputmode="decimal"></label>
-      <div style="font-size:12px;color:var(--muted);align-self:end">위·아래 한계는 자동입니다. 그 방향에 높이가 가까운 모델이 있으면 두 높이의 중간까지, 없으면 이 값까지 허용합니다.</div>
+      <label>다른 모델 인식 범위 ± (mm)<input id="f_capture" type="number" step="0.5" min="0.5" inputmode="decimal"></label>
+      <label>등록 외 유리 한계 ± (mm)<input id="f_tolWide" type="number" step="0.5" min="0.5" inputmode="decimal"></label>
+      <div class="full" style="font-size:12px;color:var(--muted)">측정값이 다른 등록 모델 높이 ± 인식 범위 안에 들어올 때만 그 모델로 보고 NG입니다. 작업 모델에서 등록 외 한계 이상 벗어나면 등록되지 않은 유리로 NG입니다. 그 외는 GOOD입니다.</div>
       <label class="full">진입 직후 판정 보류 (초) <output id="o_settle"></output><input id="f_settle" type="range" min="0" max="2" step="0.1"></label>
       <label class="full">NG 판정 지연 (초) <output id="o_ngDelay"></output><input id="f_ngDelay" type="range" min="0.5" max="5" step="0.5"></label>
       <label class="full">판정에 필요한 최소 프레임 <output id="o_stable"></output><input id="f_stable" type="range" min="3" max="20" step="1"></label>
     </div>
-    <p class="note">통과하는 동안의 값들을 모아 중앙값으로 판정합니다. 범위 밖 상태가 NG 판정 지연 시간 이상 이어지면 바로 NG입니다.</p>
+    <p class="note">유리가 다 지나가면, 진입 직후를 빼고 위아래 20%를 버린 평균으로 최종 판정합니다. 다른 모델 구역에 NG 판정 지연 시간 이상 머물면 통과 중에도 바로 NG입니다.</p>
 
     <h3>가상 눈금자 · 보정</h3>
     <div class="form">
@@ -319,7 +320,7 @@ const video=document.createElement('video'); video.muted=true; video.playsInline
 const KEY='glassgauge.v3';
 const DEF_MODELS=[{name:'M3',h:null},{name:'25M3',h:null},{name:'M6',h:441.8},{name:'25M6',h:446.8},{name:'VF best',h:null},{name:'VF better X',h:null}];
 function newCode(){const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<8;i++){s+=a[Math.floor(Math.random()*a.length)]; if(i===3) s+='-';} return s;}
-const DEF={xpos:.5,range:300,lines:5,sens:.2,band:4,gap:15,stable:6,settle:0.8,ngDelay:2,tolWide:10,zoom:true,hold:true,okBeep:false,
+const DEF={xpos:.5,range:300,lines:5,sens:.2,band:4,gap:15,stable:6,settle:0.8,ngDelay:2,tolWide:10,capture:2.5,zoom:true,hold:true,okBeep:false,
   cur:2,models:DEF_MODELS,offset:null,offset0:null,calDate:null,calModel:null,
   rxOn:true,pair:null,broker:'wss://broker.emqx.io:8084/mqtt',rxPair:''};
 let S=JSON.parse(JSON.stringify(DEF));
@@ -338,6 +339,7 @@ let state='ready', absent=99, liveCam=null, pass=null, goodHist=[];
 const counts={pass:0,ok:0,ng:0}, log=[];
 function fmt(n){return (Math.round(n*10)/10).toFixed(1);}
 function esc(x){return String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function tmean(a,cut){ if(!a.length) return NaN; const b=[...a].sort((x,y)=>x-y), k=Math.floor(b.length*(cut==null?0.2:cut)), c=b.slice(k,b.length-k); const u=c.length?c:b; return u.reduce((x,y)=>x+y,0)/u.length; }
 function median(a){if(!a.length) return NaN; const b=[...a].sort((x,y)=>x-y), m=b.length>>1; return b.length%2?b[m]:(b[m-1]+b[m])/2;}
 function med32(arr){ if(!arr.length) return 1; const b=Float32Array.from(arr).sort(); return b[b.length>>1]; }
 
@@ -350,21 +352,39 @@ const colorOf=i=>PALETTE[i%PALETTE.length];
 const calOk=()=>S.offset!=null&&isFinite(S.offset);
 const toReal=cam=>calOk()?cam+S.offset:cam;
 const toCam=real=>real-S.offset;
-/* 위·아래 허용 한계를 따로 자동 결정:
-   그 방향에 가까운 모델이 있으면 두 높이의 중간까지, 없으면 넓게(tolWide) */
+/* 판정 기준
+   - NG: 다른 등록 모델 높이 ±인식 범위(capture) 안에 들어왔을 때 (그 모델로 판단)
+         또는 작업 모델에서 넓은 한계(tolWide) 이상 벗어났을 때 (등록되지 않은 유리)
+   - 그 외: GOOD
+   tolInfo는 작업 모델 주변의 GOOD 구간(위·아래로 다음 NG 구역까지 거리)을 표시용으로 계산 */
+function otherZones(){
+  const h=curH(), out=[]; if(h==null) return out;
+  S.models.forEach((m,i)=>{ if(i===S.cur||!hasH(m)) return; out.push({name:m.name,i,h:+m.h,lo:+m.h-S.capture,hi:+m.h+S.capture}); });
+  return out;
+}
+function classify(real){
+  const h=curH(); if(h==null) return {ng:false,guess:null};
+  let best=null, bd=Math.abs(real-h);
+  otherZones().forEach(z=>{ const d=Math.abs(real-z.h); if(d<=S.capture&&d<bd){bd=d; best=z;} });
+  if(best) return {ng:true,guess:best.name};
+  if(Math.abs(real-h)>S.tolWide) return {ng:true,guess:null};
+  return {ng:false,guess:null};
+}
 function tolInfo(){
   const h=curH(), W0=S.tolWide;
   if(h==null) return {up:W0,dn:W0,byUp:null,byDn:null};
-  let gu=Infinity, gd=Infinity, bu=null, bd=null;
-  S.models.forEach((m,i)=>{ if(i===S.cur||!hasH(m)) return; const d=+m.h-h;
-    if(d>0&&d<gu){gu=d; bu=m.name;} if(d<0&&-d<gd){gd=-d; bd=m.name;} });
-  const up=gu/2<W0?gu/2:W0, dn=gd/2<W0?gd/2:W0;
-  return {up,dn,byUp:gu/2<W0?bu:null,byDn:gd/2<W0?bd:null};
+  let up=W0, dn=W0, bu=null, bd=null;
+  otherZones().forEach(z=>{
+    if(z.h>h){ const d=z.lo-h; if(d<up){up=d; bu=z.name;} }
+    else if(z.h<h){ const d=h-z.hi; if(d<dn){dn=d; bd=z.name;} }
+  });
+  return {up:Math.max(0.3,up),dn:Math.max(0.3,dn),byUp:bu,byDn:bd};
 }
-function inLim(real){const h=curH(), t=tolInfo(); return real-h<=t.up && h-real<=t.dn;}
+function inLim(real){return !classify(real).ng;}
 function limText(short){
-  const t=tolInfo();
-  return '위 +'+fmt(t.up)+(t.byUp?' ('+t.byUp+')':'')+(short?' / ':' · ')+'아래 −'+fmt(t.dn)+(t.byDn?' ('+t.byDn+')':'');
+  const zs=otherZones().filter(z=>Math.abs(z.h-curH())<=S.tolWide+S.capture).sort((a,b)=>a.h-b.h);
+  if(!zs.length) return 'NG: ±'+fmt(S.tolWide)+' 밖';
+  return 'NG: '+zs.map(z=>z.name+(short?'':' ('+fmt(z.lo)+'~'+fmt(z.hi)+')')).join(', ')+(short?'':' · ±'+fmt(S.tolWide)+' 밖');
 }
 function guessModel(real){
   let best=null, bd=Infinity;
@@ -374,11 +394,11 @@ function guessModel(real){
 }
 
 /* ---------- 설정 입력 연결 ---------- */
-['sens','stable','band','gap','range','xpos','ngDelay','settle','lines','tolWide'].forEach(k=>{
+['sens','stable','band','gap','range','xpos','ngDelay','settle','lines','tolWide','capture'].forEach(k=>{
   const el=$('#f_'+k); el.value=S[k];
   el.addEventListener('input',()=>{
     const v=parseFloat(el.value); if(isNaN(v)) return;
-    if((k==='range'||k==='tolWide')&&!(v>0)) return;
+    if((k==='range'||k==='tolWide'||k==='capture')&&!(v>0)) return;
     S[k]=(k==='stable'||k==='band'||k==='lines')?Math.round(v):v;
     if(k==='band'||k==='lines'||k==='xpos'){bgs=null; pendingBg=true;}
     if(k==='range'){ S.offset=null; S.offset0=null; goodHist=[]; toast('화면 범위가 바뀌어 보정을 초기화했습니다. 초품 보정을 다시 하세요.'); setArmed(false); }
@@ -530,22 +550,17 @@ function process(a){
   const now=performance.now();
   if(a.present){
     absent=0;
-    if(state==='ready'){state='measuring'; pass=newPass();}
+    if(!pass){state='measuring'; pass=newPass();}
     liveCam=idxToCam(a.edge,a.N);
     pass.all.push(liveCam);
     if(now-pass.t0<S.settle*1000) return;           // 진입 직후 보류
     pass.vals.push(liveCam);
     if(teach||!armed||!calOk()||curH()==null) return;
-    const h=curH();
-    const recent=toReal(median(pass.vals.slice(-5)));
-    if(inLim(recent)){
-      pass.outSince=null;
-      const allMed=toReal(median(pass.vals));
-      if(!pass.good&&!pass.ng&&pass.vals.length>=S.stable&&inLim(allMed)){pass.good=true; pass.goodVal=allMed; markGood(allMed);}
-    }else{
-      pass.lastOut=recent; if(pass.outSince==null) pass.outSince=now;
-      if(!pass.ng&&now-pass.outSince>=S.ngDelay*1000){pass.ng=true; markNg(recent);}
-    }
+    const recent=toReal(median(pass.vals.slice(-5))), c=classify(recent);
+    if(c.ng){
+      pass.lastOut=recent; pass.lastGuess=c.guess; if(pass.outSince==null) pass.outSince=now;
+      if(!pass.ng&&now-pass.outSince>=S.ngDelay*1000){pass.ng=true; markNg(recent);}   // 다른 모델 구역에 계속 머묾 → 즉시 NG
+    }else pass.outSince=null;
   }else{
     absent++;
     if(absent>8&&pass){ endPass(); }
@@ -555,18 +570,18 @@ function process(a){
 function endPass(){
   const p=pass; pass=null; state='ready'; liveCam=null;
   const vals=p.vals.length>=3?p.vals:p.all; if(!vals.length) return;
-  const camMed=median(vals);
-  if(teach){ calibrate(camMed); return; }
+  const camFin=tmean(vals,0.2);            // 상하 20%를 뺀 평균 = 최종 수치
+  if(teach){ calibrate(camFin); return; }
   if(!armed||!calOk()||curH()==null) return;
-  const h=curH(), real=toReal(camMed);
-  if(!p.good&&!p.ng){
-    if(vals.length>=3){ if(inLim(real)) markGood(real); else markNg(real); }
-    else{ addLog(null,'na'); tone(520,.12,.5); setTimeout(()=>tone(520,.12,.5),180); return; }
+  const real=toReal(camFin);
+  if(p.ng){ state='decided'; return; }
+  {
+    if(vals.length<3){ addLog(null,'na'); tone(520,.12,.5); setTimeout(()=>tone(520,.12,.5),180); return; }
+    if(classify(real).ng) markNg(real); else { markGood(real); refine(camFin); }
   }
-  if(!p.ng&&inLim(real)) refine(camMed);
 }
 /* 초품 보정: 이 유리의 높이 = 선택한 모델의 실제 높이 */
-function calibrate(camMed){
+function calibrate(camFin){ const camMed=camFin;
   const h=curH(), prev=S.offset;
   S.offset=h-camMed; S.offset0=S.offset; S.calDate=new Date().toISOString().slice(0,10); S.calModel=curModel().name;
   goodHist=[camMed]; save(); endTeach(); refreshStatic();
@@ -587,9 +602,8 @@ function markGood(real){
   mqStatus({last:{v:+fmt(real),k:'ok'}});
 }
 function markNg(real){
-  const g=guessModel(real);
-  if(pass&&pass.good){counts.ok--; const r=log.find(x=>x.k==='ok'); if(r){r.k='ng'; r.mm=real; r.g=g;} renderLog(); setLast(real,'ng',g);}
-  else{counts.pass++; addLog(real,'ng',g);}
+  const g=classify(real).guess||guessModel(real);
+  counts.pass++; addLog(real,'ng',g);
   counts.ng++; state='decided'; renderCounts(); mqStatus({last:{v:+fmt(real),k:'ng'}});
   alertId='ng'+Date.now();
   mqPub('alert',{type:'ng',id:alertId,model:curModel().name,value:+fmt(real),guess:g,t:Date.now()},true);
@@ -682,12 +696,14 @@ function drawOthers(){
   const xs=lineXs(); if(!xs.length) return;
   const wid=Math.max(16,Math.round(Math.min(W,H)/18)), xl=xs[0]-wid-4, xr=xs[xs.length-1]+4, fs=Math.max(11,Math.round(Math.min(W,H)/30));
   const items=[];
-  S.models.forEach((m,i)=>{ if(i===S.cur||!hasH(m)) return; const cam=toCam(+m.h); if(cam<0||cam>S.range) return; items.push({y:camToY(cam),name:m.name,c:colorOf(i)}); });
+  S.models.forEach((m,i)=>{ if(i===S.cur||!hasH(m)) return; const cam=toCam(+m.h); if(cam<0||cam>S.range) return; items.push({y:camToY(cam),name:m.name,c:colorOf(i),hv:+m.h}); });
   items.sort((a,b)=>a.y-b.y);
   const h0=curH(), yc=h0!=null?camToY(toCam(h0)):-1e9; let lastY=-1e9;
   items.forEach(it=>{ it.show=Math.abs(it.y-yc)>fs*1.4&&it.y-lastY>fs*1.2; if(it.show) lastY=it.y; it.ly=it.y; });
   ctx.font='700 '+fs+'px system-ui,sans-serif'; ctx.textBaseline='middle';
   items.forEach(it=>{
+    const yl=camToY(Math.max(0,toCam(it.hv)-S.capture)), yh=camToY(Math.min(S.range,toCam(it.hv)+S.capture));
+    ctx.fillStyle=it.c; ctx.globalAlpha=.18; ctx.fillRect(xl,yh,xr+wid*.8-xl,yl-yh); ctx.globalAlpha=1;
     ctx.strokeStyle=it.c; ctx.lineWidth=2; ctx.setLineDash([3,3]); ctx.beginPath(); ctx.moveTo(xl,it.y); ctx.lineTo(xr+wid*.8,it.y); ctx.stroke(); ctx.setLineDash([]);
     if(!it.show) return;
     const tx=xr+wid*.8+4, tw=ctx.measureText(it.name).width;
@@ -706,15 +722,10 @@ function drawLadder(a){
   ctx.save(); ctx.fillStyle='rgba(8,14,18,.78)'; ctx.fillRect(px,py,pw,ph); ctx.beginPath(); ctx.rect(px,py,pw,ph); ctx.clip();
   const sorted=others.map(o=>({...o,hv:+o.m.h})).sort((x,y)=>x.hv-y.hv);
   const bx=px+Math.round(fs*4.6), bw=Math.max(14,Math.round(fs*1.5));
-  sorted.forEach((o,k)=>{
-    let lo, hi;
-    if(o.i===S.cur){lo=h-ti.dn; hi=h+ti.up;}
-    else{ const prev=sorted[k-1], next=sorted[k+1];
-      lo=prev?(prev.hv+o.hv)/2:o.hv-S.tolWide; hi=next?(next.hv+o.hv)/2:o.hv+S.tolWide;
-      if(o.hv>h) lo=Math.max(lo,h+ti.up); else hi=Math.min(hi,h-ti.dn); }
-    const sel=o.i===S.cur, c=sel?'#2bc47a':colorOf(o.i);
-    ctx.fillStyle=c; ctx.globalAlpha=sel?.55:.35; ctx.fillRect(bx,yOf(hi),bw,yOf(lo)-yOf(hi)); ctx.globalAlpha=1;
-  });
+  ctx.fillStyle='#2bc47a'; ctx.globalAlpha=.5; ctx.fillRect(bx,yOf(h+S.tolWide),bw,yOf(h-S.tolWide)-yOf(h+S.tolWide)); ctx.globalAlpha=1;
+  sorted.forEach(o=>{ if(o.i===S.cur) return; const c=colorOf(o.i);
+    ctx.fillStyle='#14181b'; ctx.fillRect(bx,yOf(o.hv+S.capture),bw,yOf(o.hv-S.capture)-yOf(o.hv+S.capture));
+    ctx.fillStyle=c; ctx.globalAlpha=.75; ctx.fillRect(bx,yOf(o.hv+S.capture),bw,yOf(o.hv-S.capture)-yOf(o.hv+S.capture)); ctx.globalAlpha=1; });
   ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=1; ctx.strokeRect(bx,py+2,bw,ph-4);
   // 모델 이름
   const labs=sorted.map(o=>({o,y:yOf(o.hv)}));
@@ -801,14 +812,14 @@ function renderStatus(){
   let t='카메라 꺼짐', cls='', hint='카메라를 시작하세요.', warn=false;
   const h=curH(), m=curModel();
   if(running){
-    if(teach){t='초품 보정'; cls='run'; hint=state==='measuring'?'초품 인식 중… 다 지나가면 중앙값으로 보정합니다.':'초품이 지나가기를 기다리는 중입니다. 보정 중에는 판정·알람이 없습니다.';}
+    if(teach){t='초품 보정'; cls='run'; hint=state==='measuring'?'초품 인식 중… 다 지나가면 평균값으로 보정합니다.':'초품이 지나가기를 기다리는 중입니다. 보정 중에는 판정·알람이 없습니다.';}
     else if(!bgs){t='배경 필요'; hint='유리가 없는 상태에서 "배경 저장"을 누르세요.'; warn=true;}
     else if(h==null){t='높이 필요'; hint='모델을 눌러 "편집"에서 '+(m?m.name:'')+'의 실제 유리 높이를 입력하세요.'; warn=true;}
     else if(!calOk()){t='보정 필요'; hint='"초품 보정"을 누르고 초품을 한 장 통과시키세요. 지나간 위치가 '+fmt(h)+'mm로 맞춰집니다.'; warn=true;}
     else if(toCam(h)<0||toCam(h)>S.range){t='범위 밖'; hint=m.name+' '+fmt(h)+'mm가 화면 범위를 벗어납니다. 카메라 위치나 화면 범위를 조정한 뒤 다시 보정하세요.'; warn=true;}
     else if(!armed){t='정지'; hint='모델과 노란 기준선을 확인하고 "▶ 시작"을 누르세요.'; warn=true;}
-    else if(state==='measuring'){t='측정 중'; cls='run'; hint='유리 측정 중… 통과하는 동안의 중앙값으로 판정합니다.';}
-    else if(state==='decided'){const k=log[0]&&log[0].k; t=k==='ng'?'NG':'GOOD'; cls=k==='ng'?'ng':'ok'; hint=k==='ng'?'NG: 작업 모델과 다른 높이의 유리입니다. 혼입을 확인하세요.':'GOOD: 다음 유리를 기다립니다.';}
+    else if(state==='measuring'){t='측정 중'; cls='run'; hint='유리 측정 중… 다 지나가면 평균값(튀는 값 제외)으로 판정합니다.';}
+    else if(state==='decided'){const k=log[0]&&log[0].k; t=k==='ng'?'NG':'GOOD'; cls=k==='ng'?'ng':'ok'; hint=k==='ng'?'NG: '+(log[0]&&log[0].g?log[0].g+'(으)로 판단되는 유리입니다.':'등록되지 않은 높이의 유리입니다.')+' 혼입을 확인하세요.':'GOOD: 다음 유리를 기다립니다.';}
     else {t='감시 중'; cls='run'; hint=m.name+' '+fmt(h)+'mm 감시 중 · '+limText()+' · 1px≈'+fmt(mmPerPx())+'mm';}
   }
   {const st=$('#state'); if(st.textContent!==t) st.textContent=t; if(st.className!=='state '+cls) st.className='state '+cls;}
@@ -816,9 +827,9 @@ function renderStatus(){
   const real=liveCam==null?null:toReal(liveCam);
   $('#liveLab').textContent=calOk()?'유리 높이 (실시간)':'경계 위치 (보정 전)';
   $('#val').textContent=real==null?'—':fmt(real);
-  const g=real!=null&&calOk()?guessModel(real):null;
-  $('#guess').textContent=real==null||!calOk()?'':(g?'추정 모델: '+g:'등록되지 않은 높이');
-  $('#guess').style.color=g&&m&&g===m.name?'var(--ok)':'var(--ng)';
+  const cl=real!=null&&calOk()?classify(real):null;
+  $('#guess').textContent=!cl?'':(cl.ng?(cl.guess?cl.guess+' 구역':'등록 범위 밖'):(m?m.name+' 정상 구역':''));
+  $('#guess').style.color=cl&&!cl.ng?'var(--ok)':'var(--ng)';
   const v=$('#verdict'), ro=$('#readout'), ti=tolInfo();
   if(teach){v.innerHTML='보정 중'; v.className='verdict run'; ro.className='readout';}
   else if(state==='decided'&&log[0]&&log[0].mm!=null&&h!=null){
@@ -826,7 +837,7 @@ function renderStatus(){
     v.innerHTML=(ok?'GOOD':'NG')+'<small>'+(d>0?'+':'')+fmt(d)+' mm</small>'; v.className='verdict '+(ok?'ok':'ng'); ro.className='readout '+(ok?'ok':'ng');
   }else if(state==='measuring'&&armed){
     const settling=pass&&performance.now()-pass.t0<S.settle*1000, os=pass&&pass.outSince!=null?(performance.now()-pass.outSince)/1000:0;
-    v.innerHTML=settling?'안정화':(os>0?'범위 밖<small>'+os.toFixed(1)+' / '+S.ngDelay+'초</small>':'측정 중'); v.className='verdict run'; ro.className='readout';
+    v.innerHTML=settling?'안정화':(os>0?(pass.lastGuess||'범위 밖')+'?<small>'+os.toFixed(1)+' / '+S.ngDelay+'초</small>':'측정 중'); v.className='verdict run'; ro.className='readout';
   }else{v.innerHTML=armed?'감시 중':'정지'; v.className='verdict'+(armed?' run':''); ro.className='readout';}
   const nd=$('#needle');
   if(real==null||h==null||!calOk()) nd.hidden=true;
